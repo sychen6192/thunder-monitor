@@ -24,7 +24,8 @@ def send_line_notify(msg, token, img_path=None):
     if img_path:
         files = {'imageFile': open(img_path, 'rb')}
     r = requests.post("https://notify-api.line.me/api/notify", headers=headers, params=payload, files=files)
-    return r.status_code
+    if r.status_code != 200:
+        raise Exception(r.json()["message"])
 
 def diff_time(occur_time):
     nowTime = datetime.datetime.now()
