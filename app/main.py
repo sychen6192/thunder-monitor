@@ -9,7 +9,6 @@ from app.libs.cwb import get_thunder_data, download_thunder_img
 ENV_VAR = read_config(env="STAGE")
 logger.add(ENV_VAR["LOG"], rotation="1 week")
 areas = [[22.65694, 22.598, 120.158, 120.3025], [22.58, 22.52, 120.177, 120.349]]
-areas.append([27, 22, 110, 125])
 
 def main():
     try:
@@ -41,10 +40,10 @@ def main():
         if not alert_list and prev_alert_list:
             with open('alert.txt', 'w') as f: f.writelines('')
             download_thunder_img("crop.jpg")
-            send_line_notify(f'雷擊警報解除', ENV_VAR["LINE_TOKEN"], "crop.jpg")
+            send_line_notify("雷擊警報解除", ENV_VAR["LINE_TOKEN"], "crop.jpg")
+            logger.success('雷擊警報解除')
     except Exception as err:
-        logger.error(err)
-        time.sleep(10)
+        send_line_notify(f"Error occur: {err}", ENV_VAR["LINE_TOKEN"])
 
 if __name__ == "__main__":
     main()
