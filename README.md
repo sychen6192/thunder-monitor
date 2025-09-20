@@ -23,8 +23,6 @@ https://www.google.com/maps?q=120.587,23.769
 
 ---
 
-## 🧱 Project Structure
-
 thunder-monitor/
 ├── app/
 │ ├── main.py # Entry point
