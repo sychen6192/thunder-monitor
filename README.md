@@ -23,24 +23,6 @@ https://www.google.com/maps?q=120.587,23.769
 
 ---
 
-thunder-monitor/
-├── app/
-│ ├── main.py # Entry point
-│ ├── lambda_handler.py # AWS Lambda handler
-│ └── config.yaml # Environment configs
-├── domain/
-│ └── models.py # Data models (Alert)
-├── infrastructure/
-│ ├── cwb_client.py # Download & parse CWA KMZ
-│ ├── image.py # Image crop + timestamp
-│ ├── telegram_notifier.py # Sends messages to Telegram
-│ ├── utils.py # Geo filter, diff_time, etc.
-│ └── file_repo.py # Alert history (alert.txt)
-├── requirements.txt
-└── README.md
-
----
-
 ## ⚙️ Configuration (`config.yaml`)
 
 ```yaml
