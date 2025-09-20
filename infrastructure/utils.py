@@ -1,6 +1,5 @@
 import datetime
 
-
 def get_google_url(long, lat):
     return f"https://www.google.com/maps?q={long},{lat}"
 

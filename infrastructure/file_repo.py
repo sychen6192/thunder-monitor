@@ -1,5 +1,5 @@
 from pathlib import Path
-from domain.models import Alert
+from models.alert import Alert
 
 import json
 

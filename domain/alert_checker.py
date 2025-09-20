@@ -1,9 +1,9 @@
 import re
-from domain.models import Alert
-from infrastructure.utils import diff_time
 from loguru import logger
-from lxml.html import HtmlElement
 from typing import List, Union
+from lxml.html import HtmlElement
+from models.alert import Alert
+from infrastructure.utils import diff_time
 
 
 def is_alert_valid(doc: HtmlElement, areas: list[list[float]]) -> List[Alert]:
