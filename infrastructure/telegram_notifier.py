@@ -1,7 +1,7 @@
 import requests
 import textwrap
 
-from domain.models import Alert
+from models.alert import Alert
 from infrastructure.utils import get_google_url
 
 class TelegramNotifier:
