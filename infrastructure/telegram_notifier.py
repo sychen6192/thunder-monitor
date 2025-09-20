@@ -27,4 +27,3 @@ class TelegramNotifier:
             url = f"https://api.telegram.org/bot{self.token}/sendPhoto"
             with open(img_path, "rb") as photo:
                 requests.post(url, data={"chat_id": self.chat_id}, files={"photo": photo})
-                
