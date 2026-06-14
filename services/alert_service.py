@@ -1,19 +1,31 @@
-from domain.alert_checker import is_alert_valid
-from infrastructure import (
-cwb_client,
-image_processor,
-file_repo,
-telegram_notifier,
-)
 from typing import Any
+
+from domain.alert_checker import is_alert_valid
+from infrastructure import cwb_client, image_processor, file_repo
+from infrastructure.telegram_notifier import TelegramNotifier
+from infrastructure.line_notifier import LineNotifier
+from infrastructure.imgur_client import ImgurClient
+from infrastructure.notification_manager import NotificationManager
 
 
 class AlertService:
     def __init__(self, config: dict[str, Any]) -> None:
-        self.config = config
         self.areas = config["AREAS"]
         self.token = config["CWB_TOKEN"]
-        self.notifier = telegram_notifier.TelegramNotifier(config["TELEGRAM_TOKEN"], config["TELEGRAM_CHAT_ID"])
+
+        imgur_client = None
+        if config.get("IMGUR_CLIENT_ID"):
+            imgur_client = ImgurClient(config["IMGUR_CLIENT_ID"])
+
+        notifiers = [
+            TelegramNotifier(config["TELEGRAM_TOKEN"], config["TELEGRAM_CHAT_ID"]),
+            LineNotifier(
+                config["LINE_CHANNEL_ACCESS_TOKEN"],
+                config["LINE_TO"],
+                imgur_client=imgur_client,
+            ),
+        ]
+        self.notifier = NotificationManager(notifiers)
 
     def run(self):
         prev_alerts = file_repo.load_alerts()
@@ -25,9 +37,9 @@ class AlertService:
         if new_alerts:
             image_processor.download_thunder_img("crop.jpg")
             for alert in new_alerts:
-                self.notifier.send(alert, "crop.jpg")
+                self.notifier.send_all(alert, "crop.jpg")
             file_repo.save_alerts(current_alerts)
         elif not current_alerts and prev_alerts:
             file_repo.reset_alerts()
             image_processor.download_thunder_img("crop.jpg")
-            self.notifier.send_message("⚠️ 雷擊警報解除", "crop.jpg")
+            self.notifier.send_message_all("⚠️ 雷擊警報解除", "crop.jpg")

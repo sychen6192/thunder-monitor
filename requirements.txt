@@ -6,5 +6,3 @@ loguru==0.7.0
 cssselect==1.2.0
 pytest==8.3.3
 pytest-mock==3.14.0
-line-bot-sdk==3.7.0
-pyimgur==0.8.1
