@@ -29,6 +29,7 @@ class TelegramNotifier(Notifier):
             resp = requests.post(
                 f"https://api.telegram.org/bot{self.token}/sendMessage",
                 data={"chat_id": self.chat_id, "text": message},
+                timeout=10,
             )
             resp.raise_for_status()
 
@@ -38,6 +39,7 @@ class TelegramNotifier(Notifier):
                         f"https://api.telegram.org/bot{self.token}/sendPhoto",
                         data={"chat_id": self.chat_id},
                         files={"photo": photo},
+                        timeout=10,
                     )
                 resp.raise_for_status()
             return True
