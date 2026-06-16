@@ -575,6 +575,7 @@ STAGE:
   LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"
   LINE_TO: "<your_line_user_or_group_id>"
   IMGUR_CLIENT_ID: "<your_imgur_client_id>"
+  CWB_TOKEN: "<your_cwa_opendata_token>"
   LOG: ./log/thunder_stage.log
   AREAS:
     - [23.76, 23.73, 120.58, 120.65]
