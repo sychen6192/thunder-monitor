@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Folder>
+      <Placemark>
+        <description>閃電種類:雲對地
+時間:2024-01-01 12:00
+經緯度: 120.2 , 22.6</description>
+      </Placemark>
+      <Placemark>
+        <description>閃電種類:雲對雲
+時間:2024-01-01 12:01
+經緯度: 130.0 , 30.0</description>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>
