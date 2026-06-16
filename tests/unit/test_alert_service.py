@@ -60,7 +60,9 @@ def test_run_clearance_sends_message(sample_alert):
         service.run()
 
         file_repo.reset_alerts.assert_called_once()
-        service.notifier.send_message_all.assert_called_once_with("⚠️ 雷擊警報解除", "crop.jpg")
+        call = service.notifier.send_message_all.call_args
+        assert call.args[1] == "crop.jpg"
+        assert call.args[0].startswith("✅ 雷擊警報解除")
 
 
 def test_run_delivers_to_both_channels_end_to_end(sample_alert):

@@ -1,11 +1,14 @@
 from typing import Any
 
+from loguru import logger
+
 from domain.alert_checker import is_alert_valid
 from infrastructure import cwb_client, image_processor, file_repo
 from infrastructure.telegram_notifier import TelegramNotifier
 from infrastructure.line_notifier import LineNotifier
 from infrastructure.imgur_client import ImgurClient
 from infrastructure.notification_manager import NotificationManager
+from infrastructure.message_format import format_clearance
 
 
 class AlertService:
@@ -37,9 +40,14 @@ class AlertService:
         if new_alerts:
             image_processor.download_thunder_img("crop.jpg")
             for alert in new_alerts:
-                self.notifier.send_all(alert, "crop.jpg")
+                results = self.notifier.send_all(alert, "crop.jpg")
+                logger.info("delivery {} -> {}", alert.occur_time, results)
             file_repo.save_alerts(current_alerts)
         elif not current_alerts and prev_alerts:
             file_repo.reset_alerts()
             image_processor.download_thunder_img("crop.jpg")
-            self.notifier.send_message_all("⚠️ 雷擊警報解除", "crop.jpg")
+            earliest = min(a.occur_time for a in prev_alerts)
+            results = self.notifier.send_message_all(
+                format_clearance(earliest_occur_time=earliest), "crop.jpg"
+            )
+            logger.info("clearance delivery -> {}", results)
