@@ -25,20 +25,29 @@ https://www.google.com/maps?q=120.587,23.769
 
 ## ⚙️ Configuration (`config.yaml`)
 
-```yaml
-STAGE:
-  TELEGRAM_TOKEN: "<your_bot_token>"
-  TELEGRAM_CHAT_ID: "<chat_id>"
-  CWB_TOKEN: "<cwa_open_data_token>"
-  LOG: "log/thunder.log"
-```
+Copy `config.example.yaml` to `config.yaml` and fill in your credentials. There are two
+environments (`PROD` / `STAGE`); each needs `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`,
+`LINE_CHANNEL_ACCESS_TOKEN`, `LINE_TO`, `CWB_TOKEN`, `LOG`, and `AREAS`
+(`IMGUR_CLIENT_ID` is optional). See `config.example.yaml` for the full template.
 
 ---
 
 ## 🚀 How to Run
 
 1. Install dependencies
-   pip install -r requirements.txt
+   `./venv/bin/python -m pip install -r requirements.txt`
 
-2. Run the app
-   python app/main.py
+2. Create your config from the template and fill in credentials
+   `cp config.example.yaml config.yaml` then edit `config.yaml`
+   (`config.yaml` is gitignored. `IMGUR_CLIENT_ID` is optional — without it, LINE sends text-only.)
+
+3. Send a test notification without waiting for real lightning (goes to STAGE)
+   `./venv/bin/python app/main.py --test`
+
+4. Run for real
+   `./venv/bin/python app/main.py --env PROD`
+
+## 🔔 Notifications
+
+Alerts are pushed to both Telegram and LINE. LINE images are hosted via Imgur (HTTPS required by LINE).
+Run the test suite with `./venv/bin/python -m pytest`.
