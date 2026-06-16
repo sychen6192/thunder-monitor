@@ -20,7 +20,13 @@ class InterceptHandler(logging.Handler):
             level = logger.level(record.levelname).name
         except ValueError:
             level = record.levelno
-        logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
+        # Walk back to the real caller so loguru's {name}:{function}:{line} fields
+        # point at the infrastructure call site, not the stdlib logging internals.
+        frame, depth = logging.currentframe(), 2
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
 def main() -> None:
