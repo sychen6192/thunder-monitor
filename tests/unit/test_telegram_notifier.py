@@ -30,3 +30,4 @@ def test_send_formats_alert_and_delegates(sample_alert):
         sent_text = mock_send.call_args[0][0]
         assert sample_alert.occur_time in sent_text
         assert sample_alert.category in sent_text
+        assert "⚡ 雷擊警報" in sent_text

@@ -1,11 +1,10 @@
 import logging
-import textwrap
 
 import requests
 
 from models.alert import Alert
 from infrastructure.notifier import Notifier
-from infrastructure.utils import get_google_url
+from infrastructure.message_format import format_alert
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +15,7 @@ class TelegramNotifier(Notifier):
         self.chat_id = chat_id
 
     def send(self, alert: Alert, img_path: str | None = None) -> bool:
-        message = textwrap.dedent(f"""\
-        時間：{alert.occur_time}
-        類型：{alert.category}
-        經緯度：({alert.latitude}, {alert.longitude})
-        {get_google_url(alert.longitude, alert.latitude)}
-        """)
-        return self.send_message(message, img_path)
+        return self.send_message(format_alert(alert), img_path)
 
     def send_message(self, message: str, img_path: str | None = None) -> bool:
         try:

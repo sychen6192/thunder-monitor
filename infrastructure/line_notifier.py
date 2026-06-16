@@ -6,7 +6,7 @@ import requests
 from models.alert import Alert
 from infrastructure.notifier import Notifier
 from infrastructure.imgur_client import ImgurClient
-from infrastructure.utils import get_google_url
+from infrastructure.message_format import format_alert
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +25,10 @@ class LineNotifier(Notifier):
         self.imgur_client = imgur_client
 
     def send(self, alert: Alert, img_path: str | None = None) -> bool:
-        return self._push(self._format_alert(alert), img_path)
+        return self._push(format_alert(alert), img_path)
 
     def send_message(self, message: str, img_path: str | None = None) -> bool:
         return self._push(message, img_path)
-
-    def _format_alert(self, alert: Alert) -> str:
-        return (
-            "⚡ 雷擊警報\n"
-            f"時間：{alert.occur_time}\n"
-            f"類型：{alert.category}\n"
-            f"經緯度：({alert.latitude}, {alert.longitude})\n"
-            f"{get_google_url(alert.longitude, alert.latitude)}"
-        )
 
     def _push(self, text: str, img_path: str | None = None) -> bool:
         messages = [{"type": "text", "text": text}]

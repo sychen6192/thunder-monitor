@@ -55,7 +55,7 @@ def test_send_formats_alert(sample_alert):
         text = payload["messages"][0]["text"]
         assert sample_alert.category in text
         assert sample_alert.occur_time in text
-        assert "雷擊警報" in text
+        assert "⚡ 雷擊警報" in text  # both channels share the unified header
 
 
 def test_send_message_api_failure_returns_false():
