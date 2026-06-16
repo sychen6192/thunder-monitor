@@ -47,3 +47,37 @@ def test_load_config_empty_yaml_raises(tmp_path, monkeypatch):
     (tmp_path / "config.yaml").write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="empty"):
         load_config("PROD")
+
+
+def test_load_config_placeholder_required_raises(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["LINE_TO"] = "<your_line_user_or_group_id>"
+    _write_config(tmp_path, {"PROD": env})
+    with pytest.raises(ValueError, match="LINE_TO"):
+        load_config("PROD")
+
+
+def test_load_config_empty_required_raises(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["TELEGRAM_TOKEN"] = "   "
+    _write_config(tmp_path, {"PROD": env})
+    with pytest.raises(ValueError, match="TELEGRAM_TOKEN"):
+        load_config("PROD")
+
+
+def test_load_config_placeholder_imgur_is_dropped(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["IMGUR_CLIENT_ID"] = "<your_imgur_client_id>"
+    _write_config(tmp_path, {"PROD": env})
+    assert "IMGUR_CLIENT_ID" not in load_config("PROD")
+
+
+def test_load_config_real_imgur_kept(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["IMGUR_CLIENT_ID"] = "realid"
+    _write_config(tmp_path, {"PROD": env})
+    assert load_config("PROD")["IMGUR_CLIENT_ID"] == "realid"
