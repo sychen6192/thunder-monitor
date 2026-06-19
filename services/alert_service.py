@@ -20,14 +20,15 @@ class AlertService:
         if config.get("IMGUR_CLIENT_ID"):
             imgur_client = ImgurClient(config["IMGUR_CLIENT_ID"])
 
-        notifiers = [
-            TelegramNotifier(config["TELEGRAM_TOKEN"], config["TELEGRAM_CHAT_ID"]),
-            LineNotifier(
-                config["LINE_CHANNEL_ACCESS_TOKEN"],
-                config["LINE_TO"],
-                imgur_client=imgur_client,
-            ),
-        ]
+        notifiers = [TelegramNotifier(config["TELEGRAM_TOKEN"], config["TELEGRAM_CHAT_ID"])]
+        if config.get("LINE_CHANNEL_ACCESS_TOKEN") and config.get("LINE_TO"):
+            notifiers.append(
+                LineNotifier(
+                    config["LINE_CHANNEL_ACCESS_TOKEN"],
+                    config["LINE_TO"],
+                    imgur_client=imgur_client,
+                )
+            )
         self.notifier = NotificationManager(notifiers)
 
     def run(self):

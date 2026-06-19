@@ -5,7 +5,7 @@ PROD:
   DEBUG: False
   TELEGRAM_TOKEN: "<your_telegram_bot_token>"
   TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"
-  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"
+  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"   # optional: blank/placeholder both LINE keys => Telegram only
   LINE_TO: "<your_line_user_or_group_id>"
   IMGUR_CLIENT_ID: "<your_imgur_client_id>"   # optional: omit/placeholder => LINE sends text-only
   CWB_TOKEN: "<your_cwa_opendata_token>"
@@ -17,7 +17,7 @@ STAGE:
   DEBUG: True
   TELEGRAM_TOKEN: "<your_telegram_bot_token>"
   TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"
-  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"
+  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"   # optional: blank/placeholder both LINE keys => Telegram only
   LINE_TO: "<your_line_user_or_group_id>"
   IMGUR_CLIENT_ID: "<your_imgur_client_id>"
   CWB_TOKEN: "<your_cwa_opendata_token>"

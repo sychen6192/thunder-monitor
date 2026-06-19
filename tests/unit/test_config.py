@@ -36,9 +36,9 @@ def test_load_config_missing_env_raises(tmp_path, monkeypatch):
 def test_load_config_missing_required_key_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    del env["LINE_TO"]
+    del env["CWB_TOKEN"]
     _write_config(tmp_path, {"PROD": env})
-    with pytest.raises(ValueError, match="LINE_TO"):
+    with pytest.raises(ValueError, match="CWB_TOKEN"):
         load_config("PROD")
 
 
@@ -52,9 +52,9 @@ def test_load_config_empty_yaml_raises(tmp_path, monkeypatch):
 def test_load_config_placeholder_required_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    env["LINE_TO"] = "<your_line_user_or_group_id>"
+    env["CWB_TOKEN"] = "<your_cwa_opendata_token>"
     _write_config(tmp_path, {"PROD": env})
-    with pytest.raises(ValueError, match="LINE_TO"):
+    with pytest.raises(ValueError, match="CWB_TOKEN"):
         load_config("PROD")
 
 
@@ -81,3 +81,22 @@ def test_load_config_real_imgur_kept(tmp_path, monkeypatch):
     env["IMGUR_CLIENT_ID"] = "realid"
     _write_config(tmp_path, {"PROD": env})
     assert load_config("PROD")["IMGUR_CLIENT_ID"] == "realid"
+
+
+def test_load_config_without_line_is_allowed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    del env["LINE_CHANNEL_ACCESS_TOKEN"]
+    del env["LINE_TO"]
+    _write_config(tmp_path, {"PROD": env})
+    config = load_config("PROD")  # LINE is optional -> no error (Telegram-only is allowed)
+    assert "LINE_CHANNEL_ACCESS_TOKEN" not in config
+    assert "LINE_TO" not in config
+
+
+def test_load_config_placeholder_line_is_dropped(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["LINE_TO"] = "<your_line_user_or_group_id>"
+    _write_config(tmp_path, {"PROD": env})
+    assert "LINE_TO" not in load_config("PROD")

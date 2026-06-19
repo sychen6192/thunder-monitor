@@ -30,6 +30,15 @@ def test_init_without_imgur_id_leaves_line_without_imgur():
     assert service.notifier.notifiers[1].imgur_client is None
 
 
+def test_init_without_line_config_is_telegram_only():
+    config = _config()
+    del config["LINE_CHANNEL_ACCESS_TOKEN"]
+    del config["LINE_TO"]
+    service = AlertService(config)
+    names = [type(n).__name__ for n in service.notifier.notifiers]
+    assert names == ["TelegramNotifier"]
+
+
 def test_run_sends_new_alerts(sample_alert):
     with patch("services.alert_service.file_repo") as file_repo, \
          patch("services.alert_service.cwb_client"), \

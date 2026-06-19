@@ -49,5 +49,5 @@ environments (`PROD` / `STAGE`); each needs `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`
 
 ## 🔔 Notifications
 
-Alerts are pushed to both Telegram and LINE. LINE images are hosted via Imgur (HTTPS required by LINE).
+Alerts are pushed to Telegram, and also to LINE when LINE is configured (leave the LINE keys blank in `config.yaml` for a Telegram-only setup). LINE images are hosted via Imgur (HTTPS required by LINE).
 Run the test suite with `./venv/bin/python -m pytest`.

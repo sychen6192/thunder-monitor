@@ -6,11 +6,10 @@ REQUIRED_KEYS = [
     "CWB_TOKEN",
     "LOG",
     "AREAS",
-    "LINE_CHANNEL_ACCESS_TOKEN",
-    "LINE_TO",
 ]
 
-OPTIONAL_KEYS = ["IMGUR_CLIENT_ID"]
+# LINE is optional: leave its keys blank/placeholder for a Telegram-only setup.
+OPTIONAL_KEYS = ["IMGUR_CLIENT_ID", "LINE_CHANNEL_ACCESS_TOKEN", "LINE_TO"]
 
 
 def _is_unset(value) -> bool:
