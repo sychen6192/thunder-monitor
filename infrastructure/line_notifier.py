@@ -3,10 +3,8 @@ import logging
 
 import requests
 
-from models.alert import Alert
 from infrastructure.notifier import Notifier
 from infrastructure.imgur_client import ImgurClient
-from infrastructure.message_format import format_alert
 
 logger = logging.getLogger(__name__)
 
@@ -24,14 +22,8 @@ class LineNotifier(Notifier):
         self.to = to
         self.imgur_client = imgur_client
 
-    def send(self, alert: Alert, img_path: str | None = None) -> bool:
-        return self._push(format_alert(alert), img_path)
-
     def send_message(self, message: str, img_path: str | None = None) -> bool:
-        return self._push(message, img_path)
-
-    def _push(self, text: str, img_path: str | None = None) -> bool:
-        messages = [{"type": "text", "text": text}]
+        messages = [{"type": "text", "text": message}]
 
         if img_path and self.imgur_client:
             url = self.imgur_client.upload_image(img_path)

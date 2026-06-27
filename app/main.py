@@ -8,7 +8,7 @@ from loguru import logger
 from services.alert_service import AlertService
 from infrastructure.config import load_config
 from infrastructure import image_processor
-from infrastructure.message_format import format_clearance
+from infrastructure.message_format import format_alert, format_clearance
 from models.alert import Alert
 
 
@@ -53,7 +53,7 @@ def send_test_notifications(service: AlertService) -> None:
     except Exception as e:
         logger.warning(f"test image download failed, sending without image: {e}")
         img = None
-    logger.info("test alert delivery -> {}", service.notifier.send_all(alert, img))
+    logger.info("test alert delivery -> {}", service.notifier.send_message_all(format_alert(alert), img))
     logger.info(
         "test clearance delivery -> {}",
         service.notifier.send_message_all(format_clearance(earliest_occur_time=occur), img),

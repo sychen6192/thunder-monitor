@@ -2,9 +2,7 @@ import logging
 
 import requests
 
-from models.alert import Alert
 from infrastructure.notifier import Notifier
-from infrastructure.message_format import format_alert
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +11,6 @@ class TelegramNotifier(Notifier):
     def __init__(self, token: str, chat_id: str):
         self.token = token
         self.chat_id = chat_id
-
-    def send(self, alert: Alert, img_path: str | None = None) -> bool:
-        return self.send_message(format_alert(alert), img_path)
 
     def send_message(self, message: str, img_path: str | None = None) -> bool:
         try:

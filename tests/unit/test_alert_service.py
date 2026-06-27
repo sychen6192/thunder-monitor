@@ -52,7 +52,10 @@ def test_run_sends_new_alerts(sample_alert):
         service.run()
 
         image_processor.download_thunder_img.assert_called_once_with("crop.jpg")
-        service.notifier.send_all.assert_called_once_with(sample_alert, "crop.jpg")
+        service.notifier.send_message_all.assert_called_once()
+        message, img = service.notifier.send_message_all.call_args.args
+        assert message.startswith("⚡ 雷擊警報")
+        assert img == "crop.jpg"
         file_repo.save_alerts.assert_called_once_with([sample_alert])
 
 

@@ -46,18 +46,6 @@ def test_send_with_image_falls_back_to_text_when_imgur_fails():
         assert payload["messages"][0]["type"] == "text"
 
 
-def test_send_formats_alert(sample_alert):
-    with patch("infrastructure.line_notifier.requests.post") as mock_post:
-        mock_post.return_value.raise_for_status.return_value = None
-        notifier = LineNotifier("token", "U123")
-        assert notifier.send(sample_alert) is True
-        payload = json.loads(mock_post.call_args[1]["data"])
-        text = payload["messages"][0]["text"]
-        assert sample_alert.category in text
-        assert sample_alert.occur_time in text
-        assert "⚡ 雷擊警報" in text  # both channels share the unified header
-
-
 def test_send_message_api_failure_returns_false():
     with patch("infrastructure.line_notifier.requests.post") as mock_post:
         mock_post.side_effect = Exception("boom")

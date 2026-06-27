@@ -8,7 +8,7 @@ from infrastructure.telegram_notifier import TelegramNotifier
 from infrastructure.line_notifier import LineNotifier
 from infrastructure.imgur_client import ImgurClient
 from infrastructure.notification_manager import NotificationManager
-from infrastructure.message_format import format_clearance
+from infrastructure.message_format import format_alert, format_clearance
 
 
 class AlertService:
@@ -41,7 +41,7 @@ class AlertService:
         if new_alerts:
             image_processor.download_thunder_img("crop.jpg")
             for alert in new_alerts:
-                results = self.notifier.send_all(alert, "crop.jpg")
+                results = self.notifier.send_message_all(format_alert(alert), "crop.jpg")
                 logger.info("delivery {} -> {}", alert.occur_time, results)
             file_repo.save_alerts(current_alerts)
         elif not current_alerts and prev_alerts:

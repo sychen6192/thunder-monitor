@@ -32,10 +32,9 @@ def test_send_test_notifications_sends_alert_and_clearance():
     service = Mock()
     with patch("app.main.image_processor.download_thunder_img"):
         send_test_notifications(service)
-    assert service.notifier.send_all.called
-    assert service.notifier.send_message_all.called
-    sent_alert = service.notifier.send_all.call_args[0][0]
-    assert "測試" in sent_alert.category
+    assert service.notifier.send_message_all.call_count == 2
+    first_message = service.notifier.send_message_all.call_args_list[0].args[0]
+    assert "測試" in first_message
 
 
 def test_intercept_handler_routes_stdlib_logging_to_loguru():

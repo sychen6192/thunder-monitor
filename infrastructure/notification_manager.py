@@ -1,34 +1,30 @@
 import logging
-from typing import Callable
 
-from models.alert import Alert
 from infrastructure.notifier import Notifier
 
 logger = logging.getLogger(__name__)
 
 
 class NotificationManager:
+    """Fan a message out to every notifier, isolating per-channel failures and
+    retrying each up to ``max_retries`` extra times. Returns {ClassName: ok}.
+    """
+
     def __init__(self, notifiers: list[Notifier], max_retries: int = 1):
         self.notifiers = notifiers
         self.max_retries = max_retries
 
-    def send_all(self, alert: Alert, img_path: str | None = None) -> dict[str, bool]:
-        return self._dispatch(lambda n: n.send(alert, img_path))
-
     def send_message_all(self, message: str, img_path: str | None = None) -> dict[str, bool]:
-        return self._dispatch(lambda n: n.send_message(message, img_path))
+        return {
+            type(n).__name__: self._send_with_retry(n, message, img_path)
+            for n in self.notifiers
+        }
 
-    def _dispatch(self, action: Callable[[Notifier], bool]) -> dict[str, bool]:
-        results: dict[str, bool] = {}
-        for notifier in self.notifiers:
-            name = type(notifier).__name__
-            results[name] = self._with_retry(name, action, notifier)
-        return results
-
-    def _with_retry(self, name: str, action: Callable[[Notifier], bool], notifier: Notifier) -> bool:
+    def _send_with_retry(self, notifier: Notifier, message: str, img_path: str | None) -> bool:
+        name = type(notifier).__name__
         for attempt in range(self.max_retries + 1):
             try:
-                if action(notifier):
+                if notifier.send_message(message, img_path):
                     return True
             except Exception as e:
                 logger.error(f"{name} raised on attempt {attempt + 1}: {e}")
