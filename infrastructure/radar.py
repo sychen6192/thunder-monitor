@@ -9,8 +9,9 @@ import logging
 from io import BytesIO
 from zoneinfo import ZoneInfo
 
-import requests
 from PIL import Image, ImageDraw, ImageFont
+
+from infrastructure.cwa_http import fetch_bytes
 
 RADAR_URL = "https://www.cwa.gov.tw/Data/lightning/lightning_s.jpg"
 
@@ -24,9 +25,7 @@ logger = logging.getLogger(__name__)
 
 def download_radar(output_path: str = "crop.jpg") -> str:
     """Fetch the CWA radar image, crop + upscale + timestamp it, save to ``output_path``."""
-    res = requests.get(RADAR_URL, timeout=15)
-    res.raise_for_status()
-    with Image.open(BytesIO(res.content)) as img:
+    with Image.open(BytesIO(fetch_bytes(RADAR_URL))) as img:
         left, top, right, bottom = CROP_BOX
         right, bottom = min(right, img.width), min(bottom, img.height)
         left, top = max(0, min(left, right - 1)), max(0, min(top, bottom - 1))
