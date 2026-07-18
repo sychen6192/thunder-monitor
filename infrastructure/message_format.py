@@ -187,30 +187,3 @@ def help_text() -> str:
         "/test — 發送測試警報\n"
         "/help — 本說明"
     )
-
-
-# --- Legacy formats (used by the old AlertService/main path; removed with them) ---
-
-
-def format_alert(alert: Alert, now: datetime | None = None) -> str:
-    now = _now(now)
-    return (
-        "⚡ 雷擊警報\n"
-        f"時間：{alert.occur_time}（台灣時間 · {_relative(alert.occur_time, now)}）\n"
-        f"類型：{alert.category}\n"
-        f"位置：{alert.latitude}, {alert.longitude}\n"
-        f"地圖：{get_google_url(alert.latitude, alert.longitude)}"
-    )
-
-
-def format_clearance(earliest_occur_time: str | None = None, now: datetime | None = None) -> str:
-    now = _now(now)
-    lines = [
-        "✅ 雷擊警報解除",
-        f"解除時間：{now.strftime('%H:%M')}（台灣時間）",
-    ]
-    if earliest_occur_time:
-        start = datetime.strptime(earliest_occur_time, "%Y-%m-%d %H:%M").replace(tzinfo=TW)
-        minutes = max(1, int((now - start).total_seconds()) // 60)
-        lines.append(f"本次警戒約 {minutes} 分鐘（最早一筆 {start.strftime('%H:%M')}）")
-    return "\n".join(lines)

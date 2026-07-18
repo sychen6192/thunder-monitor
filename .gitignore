@@ -161,3 +161,8 @@ cython_debug/
 config.yaml
 log/
 .vscode
+# Thunder Monitor runtime artifacts
+state.json
+alert.txt
+crop.jpg
+.DS_Store
