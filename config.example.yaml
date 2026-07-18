@@ -4,23 +4,21 @@
 PROD:
   DEBUG: False
   TELEGRAM_TOKEN: "<your_telegram_bot_token>"
-  TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"
-  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"   # optional: blank/placeholder both LINE keys => Telegram only
-  LINE_TO: "<your_line_user_or_group_id>"
-  IMGUR_CLIENT_ID: "<your_imgur_client_id>"   # optional: omit/placeholder => LINE sends text-only
+  TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"   # 推播對象，同時是互動指令的白名單
   CWB_TOKEN: "<your_cwa_opendata_token>"
   LOG: ./log/thunder.log
-  AREAS:
-    - [22.65694, 22.598, 120.158, 120.3025]   # [top, down, left, right]
+  POLL_INTERVAL_SECONDS: 60    # 常駐模式的監測間隔（秒），可省略，預設 60
+  AREAS:                       # box = [top, down, left, right]（北界緯度, 南界緯度, 西界經度, 東界經度）
+    - name: 高雄
+      box: [22.65694, 22.598, 120.158, 120.3025]
+    # 舊的無名格式仍相容：- [22.65694, 22.598, 120.158, 120.3025]
 
 STAGE:
   DEBUG: True
   TELEGRAM_TOKEN: "<your_telegram_bot_token>"
   TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"
-  LINE_CHANNEL_ACCESS_TOKEN: "<your_line_channel_access_token>"   # optional: blank/placeholder both LINE keys => Telegram only
-  LINE_TO: "<your_line_user_or_group_id>"
-  IMGUR_CLIENT_ID: "<your_imgur_client_id>"
   CWB_TOKEN: "<your_cwa_opendata_token>"
   LOG: ./log/thunder_stage.log
   AREAS:
-    - [23.76, 23.73, 120.58, 120.65]
+    - name: 測試區
+      box: [23.76, 23.73, 120.58, 120.65]

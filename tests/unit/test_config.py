@@ -1,7 +1,7 @@
 import pytest
 import yaml
 
-from infrastructure.config import load_config
+from infrastructure.config import DEFAULT_POLL_INTERVAL_SECONDS, load_config
 
 
 def _valid_env():
@@ -11,19 +11,17 @@ def _valid_env():
         "CWB_TOKEN": "w",
         "LOG": "./log/x.log",
         "AREAS": [[23.0, 22.0, 120.0, 121.0]],
-        "LINE_CHANNEL_ACCESS_TOKEN": "la",
-        "LINE_TO": "U1",
     }
 
 
 def _write_config(dir_path, data):
-    (dir_path / "config.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+    (dir_path / "config.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
 
 
 def test_load_config_returns_env_section(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_config(tmp_path, {"PROD": _valid_env()})
-    assert load_config("PROD")["LINE_TO"] == "U1"
+    assert load_config("PROD")["TELEGRAM_TOKEN"] == "t"
 
 
 def test_load_config_missing_env_raises(tmp_path, monkeypatch):
@@ -67,36 +65,82 @@ def test_load_config_empty_required_raises(tmp_path, monkeypatch):
         load_config("PROD")
 
 
-def test_load_config_placeholder_imgur_is_dropped(tmp_path, monkeypatch):
+def test_areas_bare_boxes_get_default_names(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    env["IMGUR_CLIENT_ID"] = "<your_imgur_client_id>"
+    env["AREAS"] = [[23.0, 22.0, 120.0, 121.0], [25.0, 24.0, 121.0, 122.0]]
     _write_config(tmp_path, {"PROD": env})
-    assert "IMGUR_CLIENT_ID" not in load_config("PROD")
+    areas = load_config("PROD")["AREAS"]
+    assert areas == [
+        {"name": "區域 1", "box": [23.0, 22.0, 120.0, 121.0]},
+        {"name": "區域 2", "box": [25.0, 24.0, 121.0, 122.0]},
+    ]
 
 
-def test_load_config_real_imgur_kept(tmp_path, monkeypatch):
+def test_areas_named_form_is_kept(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    env["IMGUR_CLIENT_ID"] = "realid"
+    env["AREAS"] = [{"name": "高雄", "box": [23.0, 22.0, 120.0, 121.0]}]
     _write_config(tmp_path, {"PROD": env})
-    assert load_config("PROD")["IMGUR_CLIENT_ID"] == "realid"
+    areas = load_config("PROD")["AREAS"]
+    assert areas == [{"name": "高雄", "box": [23.0, 22.0, 120.0, 121.0]}]
 
 
-def test_load_config_without_line_is_allowed(tmp_path, monkeypatch):
+def test_areas_named_entry_without_name_gets_default(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    del env["LINE_CHANNEL_ACCESS_TOKEN"]
-    del env["LINE_TO"]
+    env["AREAS"] = [{"box": [23.0, 22.0, 120.0, 121.0]}]
     _write_config(tmp_path, {"PROD": env})
-    config = load_config("PROD")  # LINE is optional -> no error (Telegram-only is allowed)
-    assert "LINE_CHANNEL_ACCESS_TOKEN" not in config
-    assert "LINE_TO" not in config
+    assert load_config("PROD")["AREAS"][0]["name"] == "區域 1"
 
 
-def test_load_config_placeholder_line_is_dropped(tmp_path, monkeypatch):
+def test_areas_bad_box_raises(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     env = _valid_env()
-    env["LINE_TO"] = "<your_line_user_or_group_id>"
+    env["AREAS"] = [{"name": "高雄", "box": [23.0, 22.0, 120.0]}]  # only 3 numbers
     _write_config(tmp_path, {"PROD": env})
-    assert "LINE_TO" not in load_config("PROD")
+    with pytest.raises(ValueError, match="AREAS"):
+        load_config("PROD")
+
+
+def test_areas_empty_list_raises(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["AREAS"] = []
+    _write_config(tmp_path, {"PROD": env})
+    with pytest.raises(ValueError, match="AREAS"):
+        load_config("PROD")
+
+
+def test_poll_interval_defaults(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, {"PROD": _valid_env()})
+    assert load_config("PROD")["POLL_INTERVAL_SECONDS"] == DEFAULT_POLL_INTERVAL_SECONDS
+
+
+def test_poll_interval_explicit_kept(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["POLL_INTERVAL_SECONDS"] = 120
+    _write_config(tmp_path, {"PROD": env})
+    assert load_config("PROD")["POLL_INTERVAL_SECONDS"] == 120
+
+
+def test_poll_interval_invalid_raises(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["POLL_INTERVAL_SECONDS"] = 0
+    _write_config(tmp_path, {"PROD": env})
+    with pytest.raises(ValueError, match="POLL_INTERVAL_SECONDS"):
+        load_config("PROD")
+
+
+def test_legacy_line_keys_are_ignored(tmp_path, monkeypatch):
+    """A config.yaml left over from the LINE era must still load fine."""
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["LINE_CHANNEL_ACCESS_TOKEN"] = "stale"
+    env["IMGUR_CLIENT_ID"] = "stale"
+    _write_config(tmp_path, {"PROD": env})
+    config = load_config("PROD")
+    assert config["TELEGRAM_TOKEN"] == "t"  # loads without error

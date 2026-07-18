@@ -36,8 +36,17 @@ def _parse_alert(description: str) -> Union[Alert, None]:
         logger.exception("Invalid alert format")
         return None
 
-def _in_areas(areas, lat, long):
-    for top, down, left, right in areas:
+def area_name_of(lat: float, long: float, areas: list[dict]) -> Union[str, None]:
+    """Return the name of the first configured area containing the point, else None.
+
+    ``areas`` entries are config-normalized: {"name": str, "box": [top, down, left, right]}.
+    """
+    for area in areas:
+        top, down, left, right = area["box"]
         if down <= lat <= top and left <= long <= right:
-            return True
-    return False
+            return area["name"]
+    return None
+
+
+def _in_areas(areas, lat, long):
+    return area_name_of(lat, long, areas) is not None
