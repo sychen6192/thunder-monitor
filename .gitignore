@@ -166,3 +166,6 @@ state.json
 alert.txt
 crop.jpg
 .DS_Store
+
+# Claude Code machine-local settings
+.claude
