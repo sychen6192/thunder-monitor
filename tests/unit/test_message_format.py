@@ -13,7 +13,7 @@ def test_format_alert_exact(sample_alert):
         "時間：2024-01-01 12:00（台灣時間 · 約 3 分鐘前）\n"
         "類型：Cloud-to-ground\n"
         "位置：25.0, 121.5\n"
-        "地圖：https://www.google.com/maps?q=121.5,25.0"
+        "地圖：https://www.google.com/maps?q=25.0,121.5"
     )
 
 

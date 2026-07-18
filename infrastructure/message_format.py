@@ -28,7 +28,7 @@ def format_alert(alert: Alert, now: datetime | None = None) -> str:
         f"時間：{alert.occur_time}（台灣時間 · {_relative(alert.occur_time, now)}）\n"
         f"類型：{alert.category}\n"
         f"位置：{alert.latitude}, {alert.longitude}\n"
-        f"地圖：{get_google_url(alert.longitude, alert.latitude)}"
+        f"地圖：{get_google_url(alert.latitude, alert.longitude)}"
     )
 
 
