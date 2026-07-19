@@ -105,6 +105,44 @@ async def test_run_test_sends_alert_and_all_clear():
     assert sent[1][1].startswith("<b>✅ 雷擊警報解除</b>")
 
 
+def test_redact_secrets_scrubs_bot_and_cwa_tokens():
+    from app.main import _redact_secrets
+
+    record = {
+        "message": (
+            "HTTP Request: POST https://api.telegram.org/bot8628379071:"
+            'AAE9XmppwEv6mZLrgJVTVSXjUj4Ofj1jJH4/getUpdates "200 OK" and '
+            "https://opendata.cwa.gov.tw/fileapi/v1/opendataapi/O-A0039-001"
+            "?Authorization=CWA-12345678-ABCD&downloadType=WEB"
+        )
+    }
+    _redact_secrets(record)
+    assert "AAE9" not in record["message"]
+    assert "CWA-12345678" not in record["message"]
+    assert "bot<redacted>/getUpdates" in record["message"]
+    assert "Authorization=<redacted>&downloadType" in record["message"]
+
+
+def test_configure_logging_redacts_tokens_and_caps_http_noise(tmp_path):
+    from app.main import configure_logging
+
+    log_file = tmp_path / "probe.log"
+    configure_logging(str(log_file))
+    try:
+        logging.getLogger("probe.request").warning(
+            "HTTP Request: POST https://api.telegram.org/bot123456:%s/getMe", "A" * 35
+        )
+        assert logging.getLogger("httpx").level == logging.WARNING
+        assert logging.getLogger("httpcore").level == logging.WARNING
+        assert logging.getLogger("telegram").level == logging.INFO
+    finally:
+        logger.remove()
+        logger.add(sys.stderr)
+    content = log_file.read_text()
+    assert "bot<redacted>/getMe" in content
+    assert "A" * 35 not in content
+
+
 def test_intercept_handler_routes_stdlib_logging_to_loguru():
     # The headline reliability fix: infrastructure modules log via stdlib `logging`,
     # and the InterceptHandler must route those records into loguru's sinks.

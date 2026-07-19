@@ -11,6 +11,7 @@ POLL_INTERVAL_SECONDS while command handlers serve /status, /radar, /recent,
 import argparse
 import asyncio
 import logging
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -50,12 +51,37 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
+# Secrets that libraries embed in logged URLs: httpx logs every Bot API
+# request URL (token included) and cwb_client's fileapi URL carries the CWA
+# token as a query parameter. Scrub both before any sink writes.
+_SECRET_PATTERNS = (
+    (re.compile(r"bot\d+:[\w-]{20,}"), "bot<redacted>"),
+    (re.compile(r"Authorization=[\w-]+"), "Authorization=<redacted>"),
+)
+
+
+def _redact_secrets(record) -> None:
+    for pattern, replacement in _SECRET_PATTERNS:
+        record["message"] = pattern.sub(replacement, record["message"])
+
+
+def configure_logging(log_path: str) -> None:
+    """File sink + stdlib bridge, with secrets redacted and HTTP noise capped."""
+    logger.configure(patcher=_redact_secrets)
+    logger.add(log_path, rotation="1 week")
+    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+    # httpx logs the full Bot API URL at INFO on every request; telegram's
+    # DEBUG does too, and httpcore's DEBUG is pure connection noise.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("telegram").setLevel(logging.INFO)
+
+
 def main() -> None:
     args = parse_args()
     try:
         config = load_config(env=args.env)
-        logger.add(config["LOG"], rotation="1 week")
-        logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+        configure_logging(config["LOG"])
         if args.test:
             asyncio.run(run_test(config))
         elif args.once:
