@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 from domain.alert_checker import is_alert_valid
-from infrastructure import cwb_client, radar, state_repo
+from infrastructure import cwb_client, healthcheck, radar, state_repo
 from infrastructure.message_format import alert_buttons, format_all_clear, format_digest
 from infrastructure.telegram import TelegramSender
 
@@ -42,6 +42,7 @@ class Monitor:
     ):
         self.areas = config["AREAS"]
         self.token = config["CWB_TOKEN"]
+        self.healthcheck_url = config.get("HEALTHCHECK_URL", "")
         self.sender = sender
         self.lock = lock
         self.state_path = state_path
@@ -49,7 +50,11 @@ class Monitor:
 
     async def run_once(self) -> CheckResult:
         async with self.lock:
-            return await self._run(datetime.now(TW))
+            result = await self._run(datetime.now(TW))
+        # Ping outside the lock: best-effort network I/O must not block the mute
+        # commands that share it. Success pings the base URL, failure pings /fail.
+        await healthcheck.ping(self.healthcheck_url, fail=not result.ok)
+        return result
 
     async def _run(self, now: datetime) -> CheckResult:
         state = state_repo.load_state(self.state_path)
