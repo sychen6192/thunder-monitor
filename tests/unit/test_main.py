@@ -1,5 +1,6 @@
 import logging
 import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from loguru import logger
@@ -103,6 +104,26 @@ async def test_run_test_sends_alert_and_all_clear():
     assert kinds == ["alert", "text"]
     assert "測試" in sent[0][1]
     assert sent[1][1].startswith("<b>✅ 雷擊警報解除</b>")
+
+
+def test_command_menu_covers_all_public_commands():
+    from app.main import COMMAND_MENU
+
+    names = [name for name, _ in COMMAND_MENU]
+    assert names == ["status", "radar", "recent", "mute", "unmute", "test", "help"]
+    assert all(desc for _, desc in COMMAND_MENU)
+
+
+async def test_register_command_menu_publishes_bot_commands():
+    from telegram import BotCommand
+
+    from app.main import COMMAND_MENU, register_command_menu
+
+    app = SimpleNamespace(bot=AsyncMock())
+    await register_command_menu(app)
+    (cmds,) = app.bot.set_my_commands.call_args.args
+    assert [c.command for c in cmds] == [name for name, _ in COMMAND_MENU]
+    assert all(isinstance(c, BotCommand) for c in cmds)
 
 
 def test_redact_secrets_scrubs_bot_and_cwa_tokens():

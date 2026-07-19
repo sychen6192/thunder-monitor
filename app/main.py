@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from loguru import logger
-from telegram import Bot, Update
+from telegram import Bot, BotCommand, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from infrastructure.config import load_config
@@ -148,8 +148,30 @@ async def log_unauthorized(update, context) -> None:
     logger.warning("Ignored update from unauthorized chat {}", chat.id if chat else "?")
 
 
+# Telegram's "/" command menu is not automatic — the bot must publish it via
+# setMyCommands. Registered on startup so every deployment stays in sync.
+COMMAND_MENU = (
+    ("status", "目前警戒狀態與上次檢查"),
+    ("radar", "即時雷達裁圖"),
+    ("recent", "近 24 小時落雷記錄"),
+    ("mute", "靜音（預設 30 分鐘，/mute 分鐘數）"),
+    ("unmute", "解除靜音"),
+    ("test", "發送合成測試警報"),
+    ("help", "指令說明"),
+)
+
+
+async def register_command_menu(app: Application) -> None:
+    await app.bot.set_my_commands([BotCommand(name, desc) for name, desc in COMMAND_MENU])
+
+
 def run_daemon(config: dict) -> None:
-    app = Application.builder().token(config["TELEGRAM_TOKEN"]).build()
+    app = (
+        Application.builder()
+        .token(config["TELEGRAM_TOKEN"])
+        .post_init(register_command_menu)
+        .build()
+    )
     monitor, commands = build_services(config, app.bot)
     register_handlers(app, commands, allowed_chat_filter(config))
 
