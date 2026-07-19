@@ -29,14 +29,24 @@ def _parse_alert(description: str) -> Union[Alert, None]:
 
         category = catg_match.group(1).strip()
         occur_time = time_match.group(1).strip()
-        lat_str, long_str = coord_match.group(1).strip().split(" , ")
+        # CWA writes 經緯度 as "<經度 longitude> , <緯度 latitude>" — longitude first.
+        long_str, lat_str = coord_match.group(1).strip().split(" , ")
         return Alert(category, occur_time, float(lat_str), float(long_str))
     except Exception:
         logger.exception("Invalid alert format")
         return None
 
+def area_name_of(lat: float, long: float, areas: list[dict]) -> Union[str, None]:
+    """Return the name of the first configured area containing the point, else None.
+
+    ``areas`` entries are config-normalized: {"name": str, "box": [top, down, left, right]}.
+    """
+    for area in areas:
+        top, down, left, right = area["box"]
+        if down <= lat <= top and left <= long <= right:
+            return area["name"]
+    return None
+
+
 def _in_areas(areas, lat, long):
-    for top, down, left, right in areas:
-        if left <= lat <= right and down <= long <= top:
-            return True
-    return False
+    return area_name_of(lat, long, areas) is not None

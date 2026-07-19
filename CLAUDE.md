@@ -4,67 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Thunder Alert Monitor is a Python 3.11 batch job that fetches real-time lightning-strike data from Taiwan's Central Weather Administration (CWA) OpenData, filters strikes by geographic area and recency, and pushes alerts (with a cropped radar image) to messaging channels (Telegram, plus optional LINE). It runs as a one-shot process (cron / AWS Lambda-style), not a long-running server.
+Thunder Alert Monitor is a Python 3.11+ **long-running Telegram bot** that fetches real-time lightning-strike data from Taiwan's Central Weather Administration (CWA) OpenData, filters strikes by geographic area and recency, and pushes **one digest notification per detection round** (photo + HTML caption + inline buttons). It also serves interactive commands (`/status`, `/radar`, `/recent`, `/mute`, `/unmute`, `/test`, `/help`). A `--once` mode runs a single detection round without the bot for cron/Lambda-style deployments.
 
 ## Commands
 
-The `venv/` was created at a previous path (`/Users/sychen/thunder-monitor`), so its entry-point scripts have a broken shebang — **`pytest`/`pip` console scripts and `source venv/bin/activate` fail with `bad interpreter`.** Always invoke the interpreter binary directly (that file is fine):
+Create the venv fresh if it's missing (`python3 -m venv venv && ./venv/bin/pip install -r requirements.txt`). Invoke the interpreter binary directly and **run everything from the repo root** — `config.yaml`, `state.json`, `crop.jpg` and `log/` are CWD-relative:
 
 - Run all tests: `./venv/bin/python -m pytest`
-- Single test: `./venv/bin/python -m pytest "tests/unit/test_file_repo.py::TestFileRepo::test_round_trip_save_and_load"`
-- Run the app: `./venv/bin/python app/main.py --env STAGE` (`--env` is `PROD` (default) or `STAGE`)
+- Single test: `./venv/bin/python -m pytest "tests/unit/test_monitor.py::test_new_alerts_send_single_digest_and_persist"`
+- Run the daemon: `./venv/bin/python app/main.py --env PROD` (`--env` is `PROD` (default) or `STAGE`)
+- Single detection round, no bot (cron-compatible): `./venv/bin/python app/main.py --once`
 - Send synthetic test notifications (no real lightning needed; defaults to STAGE): `./venv/bin/python app/main.py --test`
-- Install/update deps: `./venv/bin/python -m pip install -r requirements.txt`
 
-System `python3` is 3.14 and lacks the project deps; only `venv` (3.11) has them. There are no `__init__.py` files and no pytest config file — `python -m pytest` works because `-m` puts the repo root on `sys.path`, making `models`, `infrastructure`, `domain`, `services` importable as top-level packages (bare `pytest` would not). **Run everything from the repo root**: `config.yaml`, `alert.txt`, `crop.jpg`, and `log/` are all hardcoded relative to CWD. VS Code uses Pyright `basic` type-checking; the code is fully type-hinted.
+There are no `__init__.py` files and no packaging — `python -m pytest` puts the repo root on `sys.path` (making `models`, `infrastructure`, `domain`, `services` top-level), and `app/main.py` bootstraps `sys.path` itself so `python app/main.py` works directly. `pytest.ini` sets `asyncio_mode = auto`, so async test functions need no decorator. VS Code uses Pyright `basic` type-checking; the code is fully type-hinted.
 
 ## Architecture
 
-Layered / clean-architecture with a one-directional dependency flow `app → services → domain → models`, where `infrastructure` provides I/O adapters and `domain` stays pure (no I/O).
+Layered, one-directional dependency flow `app → services → domain → models`, with `infrastructure` providing I/O adapters and `domain` staying pure. The process is a python-telegram-bot (PTB v22) `Application`: a JobQueue fires a detection round every `POLL_INTERVAL_SECONDS`, and command handlers serve the whitelisted chat. A single shared `asyncio.Lock` serializes all `state.json` writes (detection rounds and `/mute`/`/unmute`).
 
-- `app/main.py` — entry point: parse `--env`/`--test`, configure `loguru` file logging (an `InterceptHandler` bridges stdlib `logging` from infrastructure modules into the loguru sink), build and run `AlertService`.
-- `services/alert_service.py` — `AlertService.run()` orchestrates the whole job and is the heart of the system:
-  1. `file_repo.load_alerts()` — previous run's alerts (deduplication state)
-  2. `cwb_client.get_thunder_data()` — fetch + parse CWA data
-  3. `is_alert_valid()` — keep only valid, in-area, recent strikes
-  4. diff against previous → `new_alerts`
-  5. if new alerts: download radar crop, then `NotificationManager.send_message_all(format_alert(alert), "crop.jpg")` per alert, and persist current alerts
-  6. if previously-active alerts have all cleared: reset state and broadcast a `format_clearance(...)` "警報解除" (alert-cleared) message
-- `domain/alert_checker.py` — pure logic: parses each KML `<description>` (Chinese-language regex `閃電種類`/`時間`/`經緯度`), keeps strikes within 900s (15 min) and inside configured areas.
+- `app/main.py` — entry point: parse `--env`/`--once`/`--test`, configure `loguru` file logging (an `InterceptHandler` bridges stdlib `logging` into the loguru sink), build the PTB `Application`, register whitelisted `CommandHandler`s (a `MessageHandler` in group 1 logs-and-ignores strangers), start JobQueue + polling.
+- `services/monitor.py` — `Monitor.run_once()` is one detection round, the heart of the system:
+  1. `state_repo.load_state()` — previous state (dedup, episode, mute)
+  2. `cwb_client.get_thunder_data()` (via `asyncio.to_thread`) → `is_alert_valid()` filter
+  3. diff against `state.active_alerts` → `new_alerts`
+  4. new strikes → update episode + history, then **one** `format_digest` message (radar photo, map/CWA buttons; radar failure degrades to text-only)
+  5. previously-active alerts all gone → `format_all_clear` (episode duration + count), reset episode
+  6. persist state with a `LastCheck` record; return `CheckResult`
+  Mute skips sends but **still records** state; no catch-up messages after unmute.
+- `services/bot_commands.py` — thin async handlers; reply text comes from `message_format` pure functions. `/mute` takes the shared lock; `/test` pushes a synthetic strike (first area's center, category marked 測試) through the real digest pipeline.
+- `domain/alert_checker.py` — pure logic: parses KML `<description>` (`閃電種類`/`時間`/`經緯度`), keeps strikes within 900s and inside configured areas; `area_name_of()` resolves a point to its area name.
 - `infrastructure/` — adapters:
   - `cwb_client` (CWA `O-A0039-001` KMZ → unzip → KML → lxml)
-  - `image_processor` (crops a fixed pixel box from CWA's radar JPG and stamps a timestamp)
-  - `file_repo` (JSONL dedup store in `alert.txt`; skips malformed lines on load so a crash-truncated file can't wedge every later run)
-  - `config` (loads + validates `config.yaml`)
-  - `message_format` (`format_alert` / `format_clearance` — the single source of message text, with Taipei-tz relative times)
+  - `radar` (downloads CWA's radar JPG, crops `CROP_BOX`, 2x LANCZOS upscale, stroke-outlined Taipei timestamp)
+  - `state_repo` (`state.json`: active alerts, `muted_until`, `last_check`, 24h/200-entry history, episode fields; corrupt/partial files reset to empty state instead of wedging later runs)
+  - `config` (loads + validates `config.yaml`; normalizes `AREAS` to `{name, box}`; `POLL_INTERVAL_SECONDS` defaults to 60)
+  - `message_format` (single source of user-facing text: digest/single/all-clear notifications in Telegram-HTML with escaped dynamic fields, plus `status_text`/`recent_text`/help/mute texts; `now` injectable for snapshot tests)
+  - `telegram` (`TelegramSender`: async photo+caption/text sends with inline URL buttons, per-send retry, photo→text degradation)
   - `utils` (Google Maps URL + Taipei-tz time diff)
-  - `notifier` (the `Notifier` ABC), `telegram_notifier`, `line_notifier`, `imgur_client`, `notification_manager`
-- `models/alert.py` — `Alert` dataclass with `to_dict()`/`from_dict()` for JSONL serialization.
+- `models/alert.py` — `Alert` dataclass with `to_dict()`/`from_dict()`.
 
-### Notification system
-`AlertService → NotificationManager → [TelegramNotifier, LineNotifier]`.
+### Coordinate convention
 
-- The `Notifier` ABC exposes a single method: `send_message(message: str, img_path: str | None = None) -> bool` (True on success, False on failure). Alerts are turned into text by `message_format.format_alert()` at the call site, so notifiers only handle ready-to-send strings.
-- `NotificationManager.send_message_all()` fans a message out to every notifier, isolates per-channel failures, retries each up to `max_retries` (default 1) extra times, and returns `{ClassName: ok}`.
-- `LineNotifier` requires HTTPS image URLs, so it uploads `crop.jpg` via `ImgurClient` and falls back to text-only if Imgur is unavailable. LINE is optional: blank both LINE keys in `config.yaml` for a Telegram-only setup; omit `IMGUR_CLIENT_ID` for LINE text-only.
-
-### Data sources
-- Lightning: CWA OpenData fileapi `O-A0039-001`, downloaded as KMZ; requires `CWB_TOKEN`.
-- Radar image: CWA `lightning_s.jpg`, cropped to a hardcoded pixel box in `image_processor.py`.
-
-### Coordinate convention (easy to get wrong)
-`_parse_alert` splits the `經緯度` string `"a , b"` into `Alert(latitude=a, longitude=b)`. `domain/alert_checker.py:_in_areas` treats each `AREAS` entry as `[top, down, left, right]` and tests `left <= latitude <= right and down <= longitude <= top` — i.e. the field named `latitude` is bounded by `left`/`right`. Verify axis ordering against a real CWA payload before changing the area filter or `AREAS` config.
+CWA's `經緯度` field is **longitude-first** (`"120.2 , 22.6"`); `_parse_alert` assigns fields by real meaning (`latitude=22.6`, `longitude=120.2`). `AREAS` boxes are `[top, down, left, right]` = `[lat N, lat S, long W, long E]`, checked as `down <= lat <= top and left <= long <= right`. Display order is always standard `(lat, long)`; `get_google_url(lat, long)`. (A historical double-swap bug here was fixed in the telegram-bot redesign — see `docs/superpowers/specs/2026-07-18-telegram-bot-redesign.md`.)
 
 ## Configuration
 
-`config.yaml` has top-level environment keys (`PROD`, `STAGE`); `load_config(env)` returns that sub-dict and validates it — it fails fast on missing or blank/`<placeholder>` values, and drops any unset optional keys. Copy `config.example.yaml` to `config.yaml` to start.
+`config.yaml` has top-level environment keys (`PROD`, `STAGE`); `load_config(env)` returns that sub-dict and fails fast on missing/blank/`<placeholder>` values. Copy `config.example.yaml` to start.
 
-- **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`, `CWB_TOKEN`, `LOG`, `AREAS` (list of `[top, down, left, right]` boxes).
-- **Optional**: `LINE_CHANNEL_ACCESS_TOKEN` + `LINE_TO` (blank both → Telegram-only), `IMGUR_CLIENT_ID` (omit → LINE text-only).
-- `DEBUG` also appears in the YAML (loaded but not validated/required). `STAGE` uses a single small test area and a separate log file (`./log/thunder_stage.log`).
-
-`config.yaml` is **gitignored** — keep real tokens out of version control; never commit secrets.
+- **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (push target **and** command whitelist), `CWB_TOKEN`, `LOG`, `AREAS`.
+- **Optional**: `POLL_INTERVAL_SECONDS` (default 60). `DEBUG` is loaded but not validated.
+- `AREAS` entries: `{name: 高雄, box: [top, down, left, right]}`; legacy bare boxes still parse and get `區域 N` names.
+- Legacy `LINE_*`/`IMGUR_*` keys in an old `config.yaml` are ignored.
+- `config.yaml` is **gitignored** — never commit secrets. `state.json`/`crop.jpg` are runtime artifacts, also gitignored.
 
 ## Conventions
 
-This repo follows a "superpowers" spec→plan→implement workflow with a TDD-style, per-task commit cadence (visible in git history). Design specs and task plans live under `docs/superpowers/`. Progress was tracked via commits rather than by editing the plans, so their `- [ ]` checkboxes may read as unchecked even where the work has landed — trust the code and git history over the checkboxes.
+This repo follows a "superpowers" spec→plan→implement workflow with a TDD-style, per-task commit cadence (visible in git history). Design specs live under `docs/superpowers/`. Progress is tracked via commits rather than by editing the specs — trust the code and git history over any unchecked checkboxes. Message strings are locked by exact snapshot tests in `tests/unit/test_message_format.py`; changing wording means deliberately updating those snapshots.

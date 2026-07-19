@@ -1,8 +1,9 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo 
 
-def get_google_url(long, lat):
-    return f"https://www.google.com/maps?q={long},{lat}"
+def get_google_url(lat, long):
+    """Google Maps pin URL; expects standard (latitude, longitude) order."""
+    return f"https://www.google.com/maps?q={lat},{long}"
 
 def diff_time(occur_time: str) -> int:
     tw_zone = ZoneInfo("Asia/Taipei")
