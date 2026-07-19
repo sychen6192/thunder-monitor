@@ -132,6 +132,36 @@ async def test_fetch_failure_saves_error_and_keeps_state(tmp_path):
     assert state.last_check.ok is False and "api down" in state.last_check.error
 
 
+def _monitor_with_healthcheck(tmp_path, sender, url) -> Monitor:
+    return Monitor(
+        {"AREAS": AREAS, "CWB_TOKEN": "w", "HEALTHCHECK_URL": url},
+        sender,
+        asyncio.Lock(),
+        state_path=tmp_path / "state.json",
+        radar_path=str(tmp_path / "crop.jpg"),
+    )
+
+
+async def test_successful_round_pings_healthcheck(tmp_path):
+    sender = _sender()
+    alerts = [Alert("雲對地", _occur(3), 22.6, 120.3)]
+    fetch, valid, radar = _patches(alerts, str(tmp_path / "crop.jpg"))
+    monitor = _monitor_with_healthcheck(tmp_path, sender, "https://hc-ping.com/abc")
+    with fetch, valid, radar, \
+         patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
+        await monitor.run_once()
+    ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=False)
+
+
+async def test_failed_round_pings_healthcheck_fail(tmp_path):
+    sender = _sender()
+    monitor = _monitor_with_healthcheck(tmp_path, sender, "https://hc-ping.com/abc")
+    with patch("services.monitor.cwb_client.get_thunder_data", side_effect=RuntimeError("api down")), \
+         patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
+        await monitor.run_once()
+    ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=True)
+
+
 async def test_radar_failure_degrades_to_text_only_digest(tmp_path):
     sender = _sender()
     alerts = [Alert("雲對地", _occur(3), 22.6, 120.3)]

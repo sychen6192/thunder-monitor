@@ -35,6 +35,7 @@ Layered, one-directional dependency flow `app → services → domain → models
 - `domain/alert_checker.py` — pure logic: parses KML `<description>` (`閃電種類`/`時間`/`經緯度`), keeps strikes within 900s and inside configured areas; `area_name_of()` resolves a point to its area name.
 - `infrastructure/` — adapters:
   - `cwb_client` (CWA `O-A0039-001` KMZ → unzip → KML → lxml)
+  - `healthcheck` (best-effort healthchecks.io ping after each round: base URL on success, `/fail` on failure; empty URL disables; all errors swallowed so a ping never breaks a round)
   - `radar` (downloads CWA's radar JPG, crops `CROP_BOX`, 2x LANCZOS upscale, stroke-outlined Taipei timestamp)
   - `state_repo` (`state.json`: active alerts, `muted_until`, `last_check`, 24h/200-entry history, episode fields; corrupt/partial files reset to empty state instead of wedging later runs)
   - `config` (loads + validates `config.yaml`; normalizes `AREAS` to `{name, box}`; `POLL_INTERVAL_SECONDS` defaults to 60)
@@ -52,7 +53,7 @@ CWA's `經緯度` field is **longitude-first** (`"120.2 , 22.6"`); `_parse_alert
 `config.yaml` has top-level environment keys (`PROD`, `STAGE`); `load_config(env)` returns that sub-dict and fails fast on missing/blank/`<placeholder>` values. Copy `config.example.yaml` to start.
 
 - **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (push target **and** command whitelist), `CWB_TOKEN`, `LOG`, `AREAS`.
-- **Optional**: `POLL_INTERVAL_SECONDS` (default 60). `DEBUG` is loaded but not validated.
+- **Optional**: `POLL_INTERVAL_SECONDS` (default 60); `HEALTHCHECK_URL` (healthchecks.io dead-man's-switch, blank/absent/placeholder → disabled). `DEBUG` is loaded but not validated.
 - `AREAS` entries: `{name: 高雄, box: [top, down, left, right]}`; legacy bare boxes still parse and get `區域 N` names.
 - Legacy `LINE_*`/`IMGUR_*` keys in an old `config.yaml` are ignored.
 - `config.yaml` is **gitignored** — never commit secrets. `state.json`/`crop.jpg` are runtime artifacts, also gitignored.

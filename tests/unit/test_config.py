@@ -135,6 +135,29 @@ def test_poll_interval_invalid_raises(tmp_path, monkeypatch):
         load_config("PROD")
 
 
+def test_healthcheck_url_kept_when_set(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["HEALTHCHECK_URL"] = "https://hc-ping.com/abc"
+    _write_config(tmp_path, {"PROD": env})
+    assert load_config("PROD")["HEALTHCHECK_URL"] == "https://hc-ping.com/abc"
+
+
+def test_healthcheck_url_absent_normalizes_to_empty(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, {"PROD": _valid_env()})
+    assert load_config("PROD")["HEALTHCHECK_URL"] == ""
+
+
+def test_healthcheck_url_placeholder_normalizes_to_empty(tmp_path, monkeypatch):
+    # A copied-but-unedited placeholder must disable pinging, not ping garbage.
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["HEALTHCHECK_URL"] = "<optional_healthchecks_io_ping_url>"
+    _write_config(tmp_path, {"PROD": env})
+    assert load_config("PROD")["HEALTHCHECK_URL"] == ""
+
+
 def test_legacy_line_keys_are_ignored(tmp_path, monkeypatch):
     """A config.yaml left over from the LINE era must still load fine."""
     monkeypatch.chdir(tmp_path)

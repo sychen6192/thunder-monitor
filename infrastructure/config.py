@@ -75,4 +75,9 @@ def load_config(env: str = "PROD") -> dict:
     elif not isinstance(interval, int) or isinstance(interval, bool) or interval <= 0:
         raise ValueError("POLL_INTERVAL_SECONDS must be a positive integer")
 
+    # Optional dead-man's-switch ping URL. Normalize absent/blank/placeholder to
+    # "" (disabled) so the monitor never pings a leftover placeholder string.
+    if _is_unset(env_config.get("HEALTHCHECK_URL")):
+        env_config["HEALTHCHECK_URL"] = ""
+
     return env_config
