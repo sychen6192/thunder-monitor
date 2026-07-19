@@ -20,9 +20,9 @@ There are no `__init__.py` files and no packaging — `python -m pytest` puts th
 
 ## Architecture
 
-Layered, one-directional dependency flow `app → services → domain → models`, with `infrastructure` providing I/O adapters and `domain` staying pure. The process is a python-telegram-bot (PTB v22) `Application`: a JobQueue fires a detection round every `POLL_INTERVAL_SECONDS`, and command handlers serve the whitelisted chat. A single shared `asyncio.Lock` serializes all `state.json` writes (detection rounds and `/mute`/`/unmute`).
+Layered, one-directional dependency flow `app → services → domain → models`, with `infrastructure` providing I/O adapters and `domain` staying pure. The process is a python-telegram-bot (PTB v22) `Application`: a JobQueue fires a detection round every `POLL_INTERVAL_SECONDS`, and command handlers serve the authorized chat/users (`command_filter`). A single shared `asyncio.Lock` serializes all `state.json` writes (detection rounds and `/mute`/`/unmute`).
 
-- `app/main.py` — entry point: parse `--env`/`--once`/`--test`, configure `loguru` file logging (an `InterceptHandler` bridges stdlib `logging` into the loguru sink), build the PTB `Application`, register whitelisted `CommandHandler`s (a `MessageHandler` in group 1 logs-and-ignores strangers), start JobQueue + polling.
+- `app/main.py` — entry point: parse `--env`/`--once`/`--test`, configure `loguru` file logging (an `InterceptHandler` bridges stdlib `logging` into the loguru sink), build the PTB `Application`, register `CommandHandler`s behind `command_filter` — the push chat, plus any `COMMAND_USER_IDS` from any chat (a `MessageHandler` in group 1 logs-and-ignores strangers) — start JobQueue + polling.
 - `services/monitor.py` — `Monitor.run_once()` is one detection round, the heart of the system:
   1. `state_repo.load_state()` — previous state (dedup, episode, mute)
   2. `cwb_client.get_thunder_data()` (via `asyncio.to_thread`) → `is_alert_valid()` filter
@@ -31,7 +31,7 @@ Layered, one-directional dependency flow `app → services → domain → models
   5. previously-active alerts all gone → `format_all_clear` (episode duration + count), reset episode
   6. persist state with a `LastCheck` record; return `CheckResult`
   Mute skips sends but **still records** state; no catch-up messages after unmute.
-- `services/bot_commands.py` — thin async handlers; reply text comes from `message_format` pure functions. `/mute` takes the shared lock; `/test` pushes a synthetic strike (first area's center, category marked 測試) through the real digest pipeline.
+- `services/bot_commands.py` — thin async handlers; reply text comes from `message_format` pure functions. `/mute` takes the shared lock; `/test` pushes a synthetic strike (first area's center, category marked 測試) through the real digest pipeline, delivered to the chat that asked (CLI `--test`, which passes no update, goes to the push chat). All replies use `update.effective_message`, so a command run from a DM answers in that DM while alerts still go only to `TELEGRAM_CHAT_ID`.
 - `domain/alert_checker.py` — pure logic: parses KML `<description>` (`閃電種類`/`時間`/`經緯度`), keeps strikes within 900s and inside configured areas; `area_name_of()` resolves a point to its area name.
 - `infrastructure/` — adapters:
   - `cwb_client` (CWA `O-A0039-001` KMZ → unzip → KML → lxml)
@@ -52,8 +52,8 @@ CWA's `經緯度` field is **longitude-first** (`"120.2 , 22.6"`); `_parse_alert
 
 `config.yaml` has top-level environment keys (`PROD`, `STAGE`); `load_config(env)` returns that sub-dict and fails fast on missing/blank/`<placeholder>` values. Copy `config.example.yaml` to start.
 
-- **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (push target **and** command whitelist), `CWB_TOKEN`, `LOG`, `AREAS`.
-- **Optional**: `POLL_INTERVAL_SECONDS` (default 60); `HEALTHCHECK_URL` (healthchecks.io dead-man's-switch, blank/absent/placeholder → disabled). `DEBUG` is loaded but not validated.
+- **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (alert push target; commands are always allowed from this chat), `CWB_TOKEN`, `LOG`, `AREAS`.
+- **Optional**: `POLL_INTERVAL_SECONDS` (default 60); `HEALTHCHECK_URL` (healthchecks.io dead-man's-switch, blank/absent/placeholder → disabled); `COMMAND_USER_IDS` (numeric user ids allowed to run commands from *any* chat, e.g. a DM; absent → `[]`, i.e. push-chat-only). `DEBUG` is loaded but not validated.
 - `AREAS` entries: `{name: 高雄, box: [top, down, left, right]}`; legacy bare boxes still parse and get `區域 N` names.
 - Legacy `LINE_*`/`IMGUR_*` keys in an old `config.yaml` are ignored.
 - `config.yaml` is **gitignored** — never commit secrets. `state.json`/`crop.jpg` are runtime artifacts, also gitignored.

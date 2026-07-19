@@ -34,25 +34,34 @@ class TelegramSender:
         self.chat_id = chat_id
         self.max_retries = max_retries
 
-    async def send_alert(self, text: str, img_path: Optional[str] = None, buttons: Buttons = None) -> bool:
+    async def send_alert(
+        self,
+        text: str,
+        img_path: Optional[str] = None,
+        buttons: Buttons = None,
+        chat_id=None,
+    ) -> bool:
+        """Send to the configured chat, or to ``chat_id`` when overridden."""
+        target = self.chat_id if chat_id is None else chat_id
         if img_path:
-            if await self._attempt(self._send_photo, text, img_path, _markup(buttons)):
+            if await self._attempt(self._send_photo, target, text, img_path, _markup(buttons)):
                 return True
             logger.error("Photo send failed after retries; falling back to text-only alert")
-        return await self.send_text(text, buttons)
+        return await self.send_text(text, buttons, chat_id=target)
 
-    async def send_text(self, text: str, buttons: Buttons = None) -> bool:
-        return await self._attempt(self._send_message, text, _markup(buttons))
+    async def send_text(self, text: str, buttons: Buttons = None, chat_id=None) -> bool:
+        target = self.chat_id if chat_id is None else chat_id
+        return await self._attempt(self._send_message, target, text, _markup(buttons))
 
-    async def _send_message(self, text: str, markup) -> None:
+    async def _send_message(self, chat_id, text: str, markup) -> None:
         await self.bot.send_message(
-            chat_id=self.chat_id, text=text, parse_mode=ParseMode.HTML, reply_markup=markup
+            chat_id=chat_id, text=text, parse_mode=ParseMode.HTML, reply_markup=markup
         )
 
-    async def _send_photo(self, caption: str, img_path: str, markup) -> None:
+    async def _send_photo(self, chat_id, caption: str, img_path: str, markup) -> None:
         with open(img_path, "rb") as photo:
             await self.bot.send_photo(
-                chat_id=self.chat_id,
+                chat_id=chat_id,
                 photo=photo,
                 caption=caption,
                 parse_mode=ParseMode.HTML,

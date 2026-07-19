@@ -1,12 +1,14 @@
 import logging
 import sys
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from loguru import logger
+from telegram import Chat, Message, Update, User
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-from app.main import InterceptHandler, allowed_chat_filter, parse_args, register_handlers, run_test
+from app.main import InterceptHandler, command_filter, parse_args, register_handlers, run_test
 from services.bot_commands import Commands
 
 
@@ -39,14 +41,46 @@ def test_parse_args_once_defaults_to_prod():
     assert args.env == "PROD"
 
 
-def test_allowed_chat_filter_numeric_id():
-    f = allowed_chat_filter({"TELEGRAM_CHAT_ID": "-1001234"})
-    assert isinstance(f, filters.Chat)
-    assert -1001234 in f.chat_ids
+GROUP_ID = -1001234
+MY_USER_ID = 6006055946
+STRANGER_ID = 999999
 
 
-def test_allowed_chat_filter_username_fallback():
-    f = allowed_chat_filter({"TELEGRAM_CHAT_ID": "@mychannel"})
+def _incoming(chat_id: int, user_id: int) -> Update:
+    """A real Update, so the filters are exercised the way PTB will use them."""
+    chat = Chat(id=chat_id, type=Chat.GROUP if chat_id < 0 else Chat.PRIVATE)
+    message = Message(
+        message_id=1,
+        date=datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc),
+        chat=chat,
+        from_user=User(id=user_id, is_bot=False, first_name="tester"),
+        text="/status",
+    )
+    return Update(update_id=1, message=message)
+
+
+def test_command_filter_allows_the_push_chat():
+    f = command_filter({"TELEGRAM_CHAT_ID": str(GROUP_ID)})
+    assert bool(f.check_update(_incoming(GROUP_ID, STRANGER_ID)))
+
+
+def test_command_filter_blocks_other_chats_by_default():
+    f = command_filter({"TELEGRAM_CHAT_ID": str(GROUP_ID)})
+    assert not bool(f.check_update(_incoming(MY_USER_ID, MY_USER_ID)))
+
+
+def test_command_filter_allows_listed_user_in_private_chat():
+    f = command_filter({"TELEGRAM_CHAT_ID": str(GROUP_ID), "COMMAND_USER_IDS": [MY_USER_ID]})
+    assert bool(f.check_update(_incoming(MY_USER_ID, MY_USER_ID)))
+
+
+def test_command_filter_still_blocks_strangers_when_users_listed():
+    f = command_filter({"TELEGRAM_CHAT_ID": str(GROUP_ID), "COMMAND_USER_IDS": [MY_USER_ID]})
+    assert not bool(f.check_update(_incoming(STRANGER_ID, STRANGER_ID)))
+
+
+def test_command_filter_username_fallback():
+    f = command_filter({"TELEGRAM_CHAT_ID": "@mychannel"})
     assert isinstance(f, filters.Chat)
     assert "mychannel" in f.usernames
 
@@ -58,7 +92,7 @@ def test_register_handlers_whitelists_commands_and_logs_strangers():
         sender=AsyncMock(),
         lock=None,
     )
-    register_handlers(app, commands, allowed_chat_filter({"TELEGRAM_CHAT_ID": "42"}))
+    register_handlers(app, commands, command_filter({"TELEGRAM_CHAT_ID": "42"}))
 
     group0 = app.handlers[0]
     assert len(group0) == 8  # status/radar/recent/mute/unmute/test/help/start
@@ -80,11 +114,11 @@ async def test_run_test_sends_alert_and_all_clear():
         def __init__(self, bot, chat_id, max_retries=1):
             pass
 
-        async def send_alert(self, text, img_path=None, buttons=None):
-            sent.append(("alert", text))
+        async def send_alert(self, text, img_path=None, buttons=None, chat_id=None):
+            sent.append(("alert", text, chat_id))
             return True
 
-        async def send_text(self, text, buttons=None):
+        async def send_text(self, text, buttons=None, chat_id=None):
             sent.append(("text", text))
             return True
 
@@ -100,9 +134,10 @@ async def test_run_test_sends_alert_and_all_clear():
          patch("services.bot_commands.radar.download_radar", side_effect=RuntimeError("no net")):
         await run_test(config)
 
-    kinds = [k for k, _ in sent]
+    kinds = [entry[0] for entry in sent]
     assert kinds == ["alert", "text"]
     assert "測試" in sent[0][1]
+    assert sent[0][2] is None  # CLI --test has no originating chat -> push target
     assert sent[1][1].startswith("<b>✅ 雷擊警報解除</b>")
 
 
