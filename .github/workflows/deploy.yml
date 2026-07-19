@@ -5,7 +5,9 @@ name: Deploy
 # workflow code, so fork PRs can't reach the machine.
 on:
   push:
-    branches: [main]
+    # TEMP: redesign/telegram-bot is listed only to verify the flow before
+    # merge — remove it when the PR lands so only main publishes images.
+    branches: [main, redesign/telegram-bot]
   workflow_dispatch:
 
 concurrency:
