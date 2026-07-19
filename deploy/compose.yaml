@@ -1,0 +1,19 @@
+services:
+  thunder-monitor:
+    image: ghcr.io/sychen6192/thunder-monitor:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    environment:
+      # watchtower's bundled docker client predates API 1.44, which Docker
+      # engine 25+ requires — pin the API version it speaks.
+      - DOCKER_API_VERSION=1.44
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --label-enable --cleanup --interval 300

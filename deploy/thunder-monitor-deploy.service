@@ -1,6 +1,0 @@
-[Unit]
-Description=Thunder Monitor pull-based deploy check
-
-[Service]
-Type=oneshot
-ExecStart=%h/thunder-monitor/deploy/deploy.sh

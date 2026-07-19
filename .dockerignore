@@ -1,0 +1,16 @@
+venv/
+.venv/
+.git/
+.github/
+.claude/
+.pytest_cache/
+__pycache__/
+tests/
+docs/
+deploy/
+log/
+config.yaml
+state.json
+crop.jpg
+alert.txt
+*.md

@@ -11,6 +11,7 @@ POLL_INTERVAL_SECONDS while command handlers serve /status, /radar, /recent,
 import argparse
 import asyncio
 import logging
+import re
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -21,7 +22,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from loguru import logger
-from telegram import Bot, Update
+from telegram import Bot, BotCommand, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from infrastructure.config import load_config
@@ -50,12 +51,37 @@ class InterceptHandler(logging.Handler):
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
 
 
+# Secrets that libraries embed in logged URLs: httpx logs every Bot API
+# request URL (token included) and cwb_client's fileapi URL carries the CWA
+# token as a query parameter. Scrub both before any sink writes.
+_SECRET_PATTERNS = (
+    (re.compile(r"bot\d+:[\w-]{20,}"), "bot<redacted>"),
+    (re.compile(r"Authorization=[\w-]+"), "Authorization=<redacted>"),
+)
+
+
+def _redact_secrets(record) -> None:
+    for pattern, replacement in _SECRET_PATTERNS:
+        record["message"] = pattern.sub(replacement, record["message"])
+
+
+def configure_logging(log_path: str) -> None:
+    """File sink + stdlib bridge, with secrets redacted and HTTP noise capped."""
+    logger.configure(patcher=_redact_secrets)
+    logger.add(log_path, rotation="1 week")
+    logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+    # httpx logs the full Bot API URL at INFO on every request; telegram's
+    # DEBUG does too, and httpcore's DEBUG is pure connection noise.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("telegram").setLevel(logging.INFO)
+
+
 def main() -> None:
     args = parse_args()
     try:
         config = load_config(env=args.env)
-        logger.add(config["LOG"], rotation="1 week")
-        logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
+        configure_logging(config["LOG"])
         if args.test:
             asyncio.run(run_test(config))
         elif args.once:
@@ -122,8 +148,30 @@ async def log_unauthorized(update, context) -> None:
     logger.warning("Ignored update from unauthorized chat {}", chat.id if chat else "?")
 
 
+# Telegram's "/" command menu is not automatic — the bot must publish it via
+# setMyCommands. Registered on startup so every deployment stays in sync.
+COMMAND_MENU = (
+    ("status", "目前警戒狀態與上次檢查"),
+    ("radar", "即時雷達裁圖"),
+    ("recent", "近 24 小時落雷記錄"),
+    ("mute", "靜音（預設 30 分鐘，/mute 分鐘數）"),
+    ("unmute", "解除靜音"),
+    ("test", "發送合成測試警報"),
+    ("help", "指令說明"),
+)
+
+
+async def register_command_menu(app: Application) -> None:
+    await app.bot.set_my_commands([BotCommand(name, desc) for name, desc in COMMAND_MENU])
+
+
 def run_daemon(config: dict) -> None:
-    app = Application.builder().token(config["TELEGRAM_TOKEN"]).build()
+    app = (
+        Application.builder()
+        .token(config["TELEGRAM_TOKEN"])
+        .post_init(register_command_menu)
+        .build()
+    )
     monitor, commands = build_services(config, app.bot)
     register_handlers(app, commands, allowed_chat_filter(config))
 
