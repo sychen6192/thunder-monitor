@@ -12,6 +12,7 @@ from infrastructure.message_format import (
     radar_caption,
     recent_text,
     status_text,
+    unauthorized_text,
 )
 from infrastructure.state_repo import LastCheck, State
 
@@ -196,6 +197,14 @@ def test_mute_ack_text():
     until = datetime(2024, 1, 1, 16, 35, tzinfo=TW)
     assert mute_ack_text(until) == (
         "🔇 已靜音至 16:35。期間落雷照常記錄但不推播，/unmute 可提前恢復。"
+    )
+
+
+def test_unauthorized_text_states_denial_and_copyable_id():
+    # Deliberately says nothing about what the bot does or which commands exist.
+    assert unauthorized_text(123456789) == (
+        "⛔ 你沒有使用這個 bot 的權限。\n"
+        "如需開通請聯繫管理員，並提供你的 ID：<code>123456789</code>"
     )
 
 
