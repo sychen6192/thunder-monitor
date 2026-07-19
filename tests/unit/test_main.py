@@ -2,13 +2,21 @@ import logging
 import sys
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from loguru import logger
 from telegram import Chat, Message, Update, User
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-from app.main import InterceptHandler, command_filter, parse_args, register_handlers, run_test
+from app.main import (
+    InterceptHandler,
+    command_filter,
+    log_unauthorized,
+    parse_args,
+    register_handlers,
+    run_test,
+    unauthorized_reply_cooldown,
+)
 from services.bot_commands import Commands
 
 
@@ -57,6 +65,49 @@ def _incoming(chat_id: int, user_id: int) -> Update:
         text="/status",
     )
     return Update(update_id=1, message=message)
+
+
+def _stranger_update(text: str, chat_id: int = STRANGER_ID) -> Mock:
+    update = Mock()
+    update.effective_chat.id = chat_id
+    update.effective_user.id = chat_id
+    update.effective_message = AsyncMock()
+    update.effective_message.text = text
+    return update
+
+
+async def test_unauthorized_command_gets_a_denial_reply():
+    unauthorized_reply_cooldown.clear()
+    update = _stranger_update("/status")
+    await log_unauthorized(update, None)
+    update.effective_message.reply_text.assert_awaited_once()
+    sent = update.effective_message.reply_text.call_args.args[0]
+    assert "沒有使用這個 bot 的權限" in sent
+    assert str(STRANGER_ID) in sent  # their own id, so an admin can whitelist them
+
+
+async def test_unauthorized_plain_message_stays_silent():
+    # Only commands get a reply; random chatter must not turn the bot into an echo.
+    unauthorized_reply_cooldown.clear()
+    update = _stranger_update("hello?")
+    await log_unauthorized(update, None)
+    update.effective_message.reply_text.assert_not_awaited()
+
+
+async def test_unauthorized_repeat_command_is_rate_limited():
+    unauthorized_reply_cooldown.clear()
+    update = _stranger_update("/status")
+    await log_unauthorized(update, None)
+    await log_unauthorized(update, None)
+    update.effective_message.reply_text.assert_awaited_once()  # cooldown silences the repeat
+
+
+async def test_unauthorized_reply_cooldown_is_per_chat():
+    unauthorized_reply_cooldown.clear()
+    first, second = _stranger_update("/status"), _stranger_update("/status", chat_id=555)
+    await log_unauthorized(first, None)
+    await log_unauthorized(second, None)
+    second.effective_message.reply_text.assert_awaited_once()  # a different chat still gets told
 
 
 def test_command_filter_allows_the_push_chat():

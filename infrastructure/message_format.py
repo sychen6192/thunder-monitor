@@ -172,6 +172,18 @@ def unmute_ack_text() -> str:
     return "🔔 已恢復通知。"
 
 
+def unauthorized_text(user_id: int) -> str:
+    """Denial shown to a stranger's command.
+
+    Deliberately says nothing about what the bot monitors or which commands
+    exist; the id is echoed back (tap-to-copy) so an admin can whitelist them.
+    """
+    return (
+        "⛔ 你沒有使用這個 bot 的權限。\n"
+        f"如需開通請聯繫管理員，並提供你的 ID：<code>{user_id}</code>"
+    )
+
+
 def mute_usage_text() -> str:
     return "用法：/mute [分鐘]，例如 /mute 30（1–720）"
 

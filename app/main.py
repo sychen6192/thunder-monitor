@@ -23,10 +23,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from loguru import logger
 from telegram import Bot, BotCommand, Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from infrastructure.config import load_config
-from infrastructure.message_format import format_all_clear
+from infrastructure.message_format import format_all_clear, unauthorized_text
 from infrastructure.telegram import TelegramSender
 from services.bot_commands import Commands
 from services.monitor import Monitor
@@ -152,9 +153,32 @@ def register_handlers(app: Application, commands: Commands, allowed: filters.Bas
     app.add_handler(MessageHandler(~allowed, log_unauthorized), group=1)
 
 
+# A stranger who sends a command gets one denial, then silence for a while:
+# enough that a colleague doesn't conclude the bot is broken, not enough to make
+# it an echo chamber for whoever finds the username. Non-command messages are
+# always ignored silently — no reason to answer random chatter at all.
+UNAUTHORIZED_REPLY_COOLDOWN = timedelta(minutes=10)
+unauthorized_reply_cooldown: dict[int, datetime] = {}
+
+
 async def log_unauthorized(update, context) -> None:
     chat = update.effective_chat
-    logger.warning("Ignored update from unauthorized chat {}", chat.id if chat else "?")
+    chat_id = chat.id if chat else None
+    logger.warning("Ignored update from unauthorized chat {}", chat_id if chat_id is not None else "?")
+
+    message = update.effective_message
+    text = getattr(message, "text", None) or ""
+    if chat_id is None or not text.startswith("/"):
+        return
+    now = datetime.now(TW)
+    replied_at = unauthorized_reply_cooldown.get(chat_id)
+    if replied_at is not None and now - replied_at < UNAUTHORIZED_REPLY_COOLDOWN:
+        return
+    unauthorized_reply_cooldown[chat_id] = now
+    user = update.effective_user
+    await message.reply_text(
+        unauthorized_text(user.id if user else chat_id), parse_mode=ParseMode.HTML
+    )
 
 
 # Telegram's "/" command menu is not automatic — the bot must publish it via
