@@ -80,4 +80,15 @@ def load_config(env: str = "PROD") -> dict:
     if _is_unset(env_config.get("HEALTHCHECK_URL")):
         env_config["HEALTHCHECK_URL"] = ""
 
+    # Optional user ids allowed to run commands from any chat (the push chat is
+    # always allowed). Numeric Telegram user ids only — usernames are spoofable
+    # and Telegram may not include them on every update.
+    user_ids = env_config.get("COMMAND_USER_IDS")
+    if _is_unset(user_ids):
+        env_config["COMMAND_USER_IDS"] = []
+    elif not isinstance(user_ids, list) or not all(
+        isinstance(v, int) and not isinstance(v, bool) for v in user_ids
+    ):
+        raise ValueError("COMMAND_USER_IDS must be a list of numeric Telegram user ids")
+
     return env_config

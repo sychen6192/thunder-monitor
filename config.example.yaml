@@ -4,7 +4,8 @@
 PROD:
   DEBUG: False
   TELEGRAM_TOKEN: "<your_telegram_bot_token>"
-  TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"   # 推播對象，同時是互動指令的白名單
+  TELEGRAM_CHAT_ID: "<your_telegram_chat_id>"   # 警報推播對象；此聊天室內一律可下指令
+  # COMMAND_USER_IDS: [123456789]   # 選填：這些 Telegram user id 在任何聊天室（含私訊）都可下指令
   CWB_TOKEN: "<your_cwa_opendata_token>"
   LOG: ./log/thunder.log
   POLL_INTERVAL_SECONDS: 60    # 常駐模式的監測間隔（秒），可省略，預設 60

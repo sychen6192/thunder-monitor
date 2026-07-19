@@ -62,6 +62,29 @@ async def test_send_alert_falls_back_to_text_when_photo_fails(tmp_path):
     bot.send_message.assert_called_once()
 
 
+async def test_send_text_honours_chat_id_override():
+    bot = AsyncMock()
+    assert await _sender(bot).send_text("hi", chat_id=777) is True
+    assert bot.send_message.call_args.kwargs["chat_id"] == 777
+
+
+async def test_send_alert_photo_honours_chat_id_override(tmp_path):
+    img = tmp_path / "crop.jpg"
+    img.write_bytes(b"jpg")
+    bot = AsyncMock()
+    assert await _sender(bot).send_alert("a", img_path=str(img), chat_id=777) is True
+    assert bot.send_photo.call_args.kwargs["chat_id"] == 777
+
+
+async def test_send_alert_text_fallback_keeps_chat_id_override(tmp_path):
+    img = tmp_path / "crop.jpg"
+    img.write_bytes(b"jpg")
+    bot = AsyncMock()
+    bot.send_photo.side_effect = Exception("boom")
+    assert await _sender(bot).send_alert("a", img_path=str(img), chat_id=777) is True
+    assert bot.send_message.call_args.kwargs["chat_id"] == 777
+
+
 async def test_send_alert_without_image_is_text():
     bot = AsyncMock()
     assert await _sender(bot).send_alert("alert") is True

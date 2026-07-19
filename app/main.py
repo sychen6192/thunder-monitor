@@ -118,13 +118,22 @@ def build_services(config: dict, bot) -> tuple[Monitor, Commands]:
     return Monitor(config, sender, lock), Commands(config, sender, lock)
 
 
-def allowed_chat_filter(config: dict) -> filters.BaseFilter:
-    """Whitelist filter for the configured chat: numeric id, or @username fallback."""
+def command_filter(config: dict) -> filters.BaseFilter:
+    """Who may issue commands: the push chat, plus any COMMAND_USER_IDS anywhere.
+
+    Authorizing the *person* as well as the room means the same operator can use
+    the bot from a DM without opening it to strangers — commands reply to
+    whichever chat they came from, while alerts still only go to the push chat.
+    """
     raw = str(config["TELEGRAM_CHAT_ID"]).strip()
     try:
-        return filters.Chat(chat_id=int(raw))
+        allowed = filters.Chat(chat_id=int(raw))
     except ValueError:
-        return filters.Chat(username=raw.lstrip("@"))
+        allowed = filters.Chat(username=raw.lstrip("@"))
+    user_ids = config.get("COMMAND_USER_IDS") or []
+    if user_ids:
+        allowed = allowed | filters.User(user_id=list(user_ids))
+    return allowed
 
 
 def register_handlers(app: Application, commands: Commands, allowed: filters.BaseFilter) -> None:
@@ -173,7 +182,7 @@ def run_daemon(config: dict) -> None:
         .build()
     )
     monitor, commands = build_services(config, app.bot)
-    register_handlers(app, commands, allowed_chat_filter(config))
+    register_handlers(app, commands, command_filter(config))
 
     async def monitor_job(context) -> None:
         await monitor.run_once()

@@ -26,9 +26,10 @@ def _commands(tmp_path, sender=None) -> Commands:
     )
 
 
-def _update() -> Mock:
+def _update(chat_id: int = 42) -> Mock:
     update = Mock()
     update.effective_message = AsyncMock()
+    update.effective_chat.id = chat_id
     return update
 
 
@@ -139,6 +140,26 @@ async def test_test_command_pushes_marked_digest_through_sender(tmp_path):
     text = sender.send_alert.call_args.args[0]
     assert "測試" in text and text.startswith("<b>⚡ 雷擊警報 — 高雄</b>")
     assert sender.send_alert.call_args.kwargs["img_path"] is None
+
+
+async def test_test_command_replies_in_the_chat_that_asked(tmp_path):
+    # Running /test from a DM must not push the synthetic alert into the alert group.
+    sender = AsyncMock()
+    sender.send_alert.return_value = True
+    commands = _commands(tmp_path, sender)
+    with patch("services.bot_commands.radar.download_radar", side_effect=RuntimeError("no net")):
+        await commands.test(_update(chat_id=6006055946), _context())
+    assert sender.send_alert.call_args.kwargs["chat_id"] == 6006055946
+
+
+async def test_test_command_without_update_uses_push_target(tmp_path):
+    # The CLI --test path has no originating chat and must fall back to the push chat.
+    sender = AsyncMock()
+    sender.send_alert.return_value = True
+    commands = _commands(tmp_path, sender)
+    with patch("services.bot_commands.radar.download_radar", side_effect=RuntimeError("no net")):
+        await commands.test(None, None)
+    assert sender.send_alert.call_args.kwargs["chat_id"] is None
 
 
 async def test_help_lists_commands(tmp_path):

@@ -102,7 +102,12 @@ class Commands:
         await self._reply(update, unmute_ack_text())
 
     async def test(self, update, context) -> None:
-        """Push a synthetic alert through the real digest pipeline (photo, buttons and all)."""
+        """Push a synthetic alert through the real digest pipeline (photo, buttons and all).
+
+        Delivered to the chat that asked, so testing from a DM doesn't fire a fake
+        alert into the group; run it *in* the group to verify delivery there. The
+        CLI ``--test`` path passes no update and falls back to the push chat.
+        """
         alert = self._synthetic_alert()
         text = format_digest([alert], self.areas)
         img_path = None
@@ -110,7 +115,10 @@ class Commands:
             img_path = await asyncio.to_thread(radar.download_radar, self.radar_path)
         except Exception as e:
             logger.warning(f"/test radar image failed, sending text-only: {e}")
-        delivered = await self.sender.send_alert(text, img_path=img_path, buttons=alert_buttons(alert))
+        chat_id = update.effective_chat.id if update is not None else None
+        delivered = await self.sender.send_alert(
+            text, img_path=img_path, buttons=alert_buttons(alert), chat_id=chat_id
+        )
         logger.info("Test alert delivery -> {}", delivered)
 
     async def help(self, update, context) -> None:

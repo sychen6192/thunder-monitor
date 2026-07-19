@@ -158,6 +158,29 @@ def test_healthcheck_url_placeholder_normalizes_to_empty(tmp_path, monkeypatch):
     assert load_config("PROD")["HEALTHCHECK_URL"] == ""
 
 
+def test_command_user_ids_kept_when_set(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["COMMAND_USER_IDS"] = [6006055946]
+    _write_config(tmp_path, {"PROD": env})
+    assert load_config("PROD")["COMMAND_USER_IDS"] == [6006055946]
+
+
+def test_command_user_ids_absent_normalizes_to_empty_list(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    _write_config(tmp_path, {"PROD": _valid_env()})
+    assert load_config("PROD")["COMMAND_USER_IDS"] == []
+
+
+def test_command_user_ids_non_integer_raises(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env = _valid_env()
+    env["COMMAND_USER_IDS"] = ["@someone"]
+    _write_config(tmp_path, {"PROD": env})
+    with pytest.raises(ValueError, match="COMMAND_USER_IDS"):
+        load_config("PROD")
+
+
 def test_legacy_line_keys_are_ignored(tmp_path, monkeypatch):
     """A config.yaml left over from the LINE era must still load fine."""
     monkeypatch.chdir(tmp_path)
