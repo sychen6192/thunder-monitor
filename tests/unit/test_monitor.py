@@ -153,12 +153,63 @@ async def test_successful_round_pings_healthcheck(tmp_path):
     ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=False)
 
 
-async def test_failed_round_pings_healthcheck_fail(tmp_path):
+async def test_single_failed_round_stays_silent(tmp_path):
+    # One transient CWA blip must not page: below the consecutive-failure
+    # threshold the round pings nothing and lets the dead-man's-switch absorb it.
     sender = _sender()
     monitor = _monitor_with_healthcheck(tmp_path, sender, "https://hc-ping.com/abc")
     with patch("services.monitor.cwb_client.get_thunder_data", side_effect=RuntimeError("api down")), \
          patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
         await monitor.run_once()
+    ping.assert_not_awaited()
+
+
+async def test_consecutive_failures_reaching_threshold_ping_fail(tmp_path):
+    sender = _sender()
+    monitor = _monitor_with_healthcheck(tmp_path, sender, "https://hc-ping.com/abc")
+    with patch("services.monitor.cwb_client.get_thunder_data", side_effect=RuntimeError("api down")), \
+         patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
+        await monitor.run_once()  # failure 1
+        await monitor.run_once()  # failure 2
+        assert ping.await_count == 0
+        await monitor.run_once()  # failure 3 -> default threshold
+    ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=True)
+
+
+async def test_success_resets_consecutive_failures(tmp_path):
+    sender = _sender()
+    monitor = _monitor_with_healthcheck(tmp_path, sender, "https://hc-ping.com/abc")
+    alerts = [Alert("雲對地", _occur(3), 22.6, 120.3)]
+    fetch, valid, radar = _patches(alerts, str(tmp_path / "crop.jpg"))
+    with patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
+        with patch("services.monitor.cwb_client.get_thunder_data", side_effect=RuntimeError("down")):
+            await monitor.run_once()  # failure 1
+            await monitor.run_once()  # failure 2
+        with fetch, valid, radar:
+            await monitor.run_once()  # success -> reset counter, ping base url
+    assert load_state(tmp_path / "state.json").consecutive_failures == 0
+    ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=False)
+
+
+async def test_fail_threshold_is_configurable(tmp_path):
+    sender = _sender()
+    monitor = Monitor(
+        {
+            "AREAS": AREAS,
+            "CWB_TOKEN": "w",
+            "HEALTHCHECK_URL": "https://hc-ping.com/abc",
+            "HEALTHCHECK_FAIL_THRESHOLD": 2,
+        },
+        sender,
+        asyncio.Lock(),
+        state_path=tmp_path / "state.json",
+        radar_path=str(tmp_path / "crop.jpg"),
+    )
+    with patch("services.monitor.cwb_client.get_thunder_data", side_effect=RuntimeError("api down")), \
+         patch("services.monitor.healthcheck.ping", new_callable=AsyncMock) as ping:
+        await monitor.run_once()  # failure 1 -> below configured threshold of 2
+        assert ping.await_count == 0
+        await monitor.run_once()  # failure 2 -> threshold
     ping.assert_awaited_once_with("https://hc-ping.com/abc", fail=True)
 
 
