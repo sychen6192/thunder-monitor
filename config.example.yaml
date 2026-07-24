@@ -9,7 +9,8 @@ PROD:
   CWB_TOKEN: "<your_cwa_opendata_token>"
   LOG: ./log/thunder.log
   POLL_INTERVAL_SECONDS: 60    # 常駐模式的監測間隔（秒），可省略，預設 60
-  # HEALTHCHECK_URL: https://hc-ping.com/<uuid>   # 選填：每輪成功後 ping，失敗時 ping /fail（dead-man's switch）；留空或省略即停用
+  # HEALTHCHECK_URL: https://hc-ping.com/<uuid>   # 選填：每輪成功後 ping base url，連續失敗達門檻才 ping /fail（dead-man's switch）；留空或省略即停用
+  # HEALTHCHECK_FAIL_THRESHOLD: 3   # 選填：連續失敗幾輪才 ping /fail，避免單次 CWA 抖動就告警，預設 3
   AREAS:                       # box = [top, down, left, right]（北界緯度, 南界緯度, 西界經度, 東界經度）
     - name: 高雄
       box: [22.65694, 22.598, 120.158, 120.3025]

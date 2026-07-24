@@ -29,6 +29,7 @@ class CheckResult:
     ok: bool
     new_count: int
     error: Optional[str] = None
+    consecutive_failures: int = 0  # unbroken run of failed rounds after this one
 
 
 class Monitor:
@@ -43,6 +44,10 @@ class Monitor:
         self.areas = config["AREAS"]
         self.token = config["CWB_TOKEN"]
         self.healthcheck_url = config.get("HEALTHCHECK_URL", "")
+        # Only ping /fail after this many consecutive failed rounds, so a single
+        # transient CWA blip does not page. The dead-man's-switch grace period on
+        # healthchecks.io covers the sub-threshold gap.
+        self.fail_threshold = max(1, int(config.get("HEALTHCHECK_FAIL_THRESHOLD", 3) or 3))
         self.sender = sender
         self.lock = lock
         self.state_path = state_path
@@ -52,8 +57,15 @@ class Monitor:
         async with self.lock:
             result = await self._run(datetime.now(TW))
         # Ping outside the lock: best-effort network I/O must not block the mute
-        # commands that share it. Success pings the base URL, failure pings /fail.
-        await healthcheck.ping(self.healthcheck_url, fail=not result.ok)
+        # commands that share it. A successful round pings the base URL (the
+        # dead-man's-switch heartbeat); a failed round pings /fail only once it
+        # has failed self.fail_threshold times in a row. A sub-threshold failure
+        # pings nothing and leaves the heartbeat to lapse into the grace period,
+        # so one transient CWA blip never pages.
+        if result.ok:
+            await healthcheck.ping(self.healthcheck_url, fail=False)
+        elif result.consecutive_failures >= self.fail_threshold:
+            await healthcheck.ping(self.healthcheck_url, fail=True)
         return result
 
     async def _run(self, now: datetime) -> CheckResult:
@@ -63,7 +75,10 @@ class Monitor:
             current = is_alert_valid(doc, self.areas)
         except Exception as e:
             logger.exception("Thunder data fetch failed")
-            result = CheckResult(now, False, 0, str(e))
+            state.consecutive_failures += 1
+            result = CheckResult(
+                now, False, 0, str(e), consecutive_failures=state.consecutive_failures
+            )
             self._finish(state, result)
             return result
 
@@ -81,6 +96,7 @@ class Monitor:
             state.episode_count = 0
 
         state.active_alerts = current
+        state.consecutive_failures = 0  # a good round breaks any failure streak
         result = CheckResult(now, True, len(new_alerts))
         self._finish(state, result)
         return result

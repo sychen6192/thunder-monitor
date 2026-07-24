@@ -34,10 +34,10 @@ Layered, one-directional dependency flow `app → services → domain → models
 - `services/bot_commands.py` — thin async handlers; reply text comes from `message_format` pure functions. `/mute` takes the shared lock; `/test` pushes a synthetic strike (first area's center, category marked 測試) through the real digest pipeline, delivered to the chat that asked (CLI `--test`, which passes no update, goes to the push chat). All replies use `update.effective_message`, so a command run from a DM answers in that DM while alerts still go only to `TELEGRAM_CHAT_ID`.
 - `domain/alert_checker.py` — pure logic: parses KML `<description>` (`閃電種類`/`時間`/`經緯度`), keeps strikes within 900s and inside configured areas; `area_name_of()` resolves a point to its area name.
 - `infrastructure/` — adapters:
-  - `cwb_client` (CWA `O-A0039-001` KMZ → unzip → KML → lxml)
-  - `healthcheck` (best-effort healthchecks.io ping after each round: base URL on success, `/fail` on failure; empty URL disables; all errors swallowed so a ping never breaks a round)
+  - `cwb_client` (CWA `O-A0039-001` KMZ → unzip → KML → lxml); the shared `cwa_http.fetch_bytes` retries transient fetch failures (timeout/5xx/TLS) a few times with linear backoff before giving up, so a single CWA blip doesn't fail the round
+  - `healthcheck` (best-effort healthchecks.io ping after each round: base URL on success; `/fail` only once a round has failed `HEALTHCHECK_FAIL_THRESHOLD` times **in a row** — a sub-threshold failure pings nothing and lets the missed heartbeat lapse into the grace period, so one transient blip never pages; empty URL disables; all errors swallowed so a ping never breaks a round)
   - `radar` (downloads CWA's radar JPG, crops `CROP_BOX`, 2x LANCZOS upscale, stroke-outlined Taipei timestamp)
-  - `state_repo` (`state.json`: active alerts, `muted_until`, `last_check`, 24h/200-entry history, episode fields; corrupt/partial files reset to empty state instead of wedging later runs)
+  - `state_repo` (`state.json`: active alerts, `muted_until`, `last_check`, 24h/200-entry history, episode fields, `consecutive_failures` counter; corrupt/partial files reset to empty state instead of wedging later runs)
   - `config` (loads + validates `config.yaml`; normalizes `AREAS` to `{name, box}`; `POLL_INTERVAL_SECONDS` defaults to 60)
   - `message_format` (single source of user-facing text: digest/single/all-clear notifications in Telegram-HTML with escaped dynamic fields, plus `status_text`/`recent_text`/help/mute texts; `now` injectable for snapshot tests)
   - `telegram` (`TelegramSender`: async photo+caption/text sends with inline URL buttons, per-send retry, photo→text degradation)
@@ -53,7 +53,7 @@ CWA's `經緯度` field is **longitude-first** (`"120.2 , 22.6"`); `_parse_alert
 `config.yaml` has top-level environment keys (`PROD`, `STAGE`); `load_config(env)` returns that sub-dict and fails fast on missing/blank/`<placeholder>` values. Copy `config.example.yaml` to start.
 
 - **Required** per env: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` (alert push target; commands are always allowed from this chat), `CWB_TOKEN`, `LOG`, `AREAS`.
-- **Optional**: `POLL_INTERVAL_SECONDS` (default 60); `HEALTHCHECK_URL` (healthchecks.io dead-man's-switch, blank/absent/placeholder → disabled); `COMMAND_USER_IDS` (numeric user ids allowed to run commands from *any* chat, e.g. a DM; absent → `[]`, i.e. push-chat-only). `DEBUG` is loaded but not validated.
+- **Optional**: `POLL_INTERVAL_SECONDS` (default 60); `HEALTHCHECK_URL` (healthchecks.io dead-man's-switch, blank/absent/placeholder → disabled); `HEALTHCHECK_FAIL_THRESHOLD` (consecutive failed rounds before a `/fail` ping, default 3, floored at 1); `COMMAND_USER_IDS` (numeric user ids allowed to run commands from *any* chat, e.g. a DM; absent → `[]`, i.e. push-chat-only). `DEBUG` is loaded but not validated.
 - `AREAS` entries: `{name: 高雄, box: [top, down, left, right]}`; legacy bare boxes still parse and get `區域 N` names.
 - Legacy `LINE_*`/`IMGUR_*` keys in an old `config.yaml` are ignored.
 - `config.yaml` is **gitignored** — never commit secrets. `state.json`/`crop.jpg` are runtime artifacts, also gitignored.

@@ -51,6 +51,7 @@ class State:
     history: list[Alert] = field(default_factory=list)
     episode_started: Optional[str] = None  # occur_time of this episode's first strike
     episode_count: int = 0
+    consecutive_failures: int = 0  # unbroken run of failed fetch rounds; gates the /fail ping
 
     def is_muted(self, now: Optional[datetime] = None) -> bool:
         now = now if now is not None else datetime.now(TW)
@@ -104,6 +105,10 @@ def load_state(path: Union[str, Path] = STATE_FILE) -> State:
         state.episode_count = int(data.get("episode_count") or 0)
     except (ValueError, TypeError):
         state.episode_count = 0
+    try:
+        state.consecutive_failures = int(data.get("consecutive_failures") or 0)
+    except (ValueError, TypeError):
+        state.consecutive_failures = 0
     muted = data.get("muted_until")
     if muted:
         try:
@@ -127,5 +132,6 @@ def save_state(state: State, path: Union[str, Path] = STATE_FILE) -> None:
         "history": [a.to_dict() for a in state.history],
         "episode_started": state.episode_started,
         "episode_count": state.episode_count,
+        "consecutive_failures": state.consecutive_failures,
     }
     Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

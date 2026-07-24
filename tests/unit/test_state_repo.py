@@ -90,3 +90,15 @@ def test_prune_history_skips_unparseable_times():
     state = State(history=[Alert("c", "garbage", 22.6, 120.2)])
     state.prune_history(now=NOW)
     assert state.history == []
+
+
+def test_consecutive_failures_round_trips(tmp_path):
+    path = tmp_path / "state.json"
+    save_state(State(consecutive_failures=3), path)
+    assert load_state(path).consecutive_failures == 3
+
+
+def test_consecutive_failures_defaults_to_zero_on_partial(tmp_path, sample_alert):
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"active_alerts": [sample_alert.to_dict()]}), encoding="utf-8")
+    assert load_state(path).consecutive_failures == 0
